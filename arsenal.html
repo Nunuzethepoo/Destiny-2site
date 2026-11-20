@@ -310,7 +310,8 @@
       const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
       const vus = new Set();
       return etats.filter(function (socket) { return socket && socket.plugHash && socket.isEnabled !== false; }).map(function (socket) {
-        const definition = definitionsObjets[Number(socket.plugHash)];
+        const hash = Number(socket.plugHash);
+        const definition = cacheDefinitions.get(hash) || definitionsObjets[hash];
         const props = definition && definition.displayProperties || {};
         const categorie = definition && definition.plug && definition.plug.plugCategoryIdentifier || "";
         if (!props.name || /shader|ornament|transmat|emote/i.test(categorie)) return null;
@@ -320,15 +321,59 @@
       }).filter(Boolean);
     }
 
+    async function chargerDefinitionsPerksArmes() {
+      const hashs = new Set();
+      for (const objet of tousLesObjets) {
+        if (objet.type !== "arme" || !objet.idInstance) continue;
+        const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
+        etats.forEach(function (socket) {
+          if (socket && socket.plugHash && socket.isEnabled !== false) hashs.add(Number(socket.plugHash));
+        });
+      }
+      let cache = {};
+      try { cache = JSON.parse(localStorage.getItem("vigiePerkDefsCache") || "{}"); } catch (_) {}
+      const manquants = Array.from(hashs).filter(function (hash) {
+        return !cacheDefinitions.has(hash) && !cache[hash];
+      });
+      let prochain = 0;
+      async function worker() {
+        while (prochain < manquants.length) {
+          const hash = manquants[prochain++];
+          try {
+            const definition = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/");
+            const compacte = {
+              displayProperties: {
+                name: definition.displayProperties && definition.displayProperties.name,
+                icon: definition.displayProperties && definition.displayProperties.icon,
+                description: definition.displayProperties && definition.displayProperties.description
+              },
+              plug: { plugCategoryIdentifier: definition.plug && definition.plug.plugCategoryIdentifier || "" }
+            };
+            cacheDefinitions.set(hash, compacte);
+            cache[hash] = compacte;
+          } catch (_) { cacheDefinitions.set(hash, definitionsObjets[hash] || null); }
+          await new Promise(function (resolve) { setTimeout(resolve, 80); });
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(4, manquants.length) }, worker));
+      try { localStorage.setItem("vigiePerkDefsCache", JSON.stringify(cache)); } catch (_) {}
+      for (const hash of hashs) {
+        if (!cacheDefinitions.has(hash) && cache[hash]) cacheDefinitions.set(Number(hash), cache[hash]);
+      }
+      return hashs.size;
+    }
+
     async function indexerPerksArmes() {
       try {
         await chargerSockets();
+        const nombrePlugs = await chargerDefinitionsPerksArmes();
         tousLesObjets.filter(function (objet) { return objet.type === "arme"; }).forEach(function (objet) {
           objet.perks = perksActifsPourObjet(objet);
         });
         perksArmesCharges = true;
         afficher();
-        statut.textContent = "Arsenal chargé · perks des armes indexés : tu peux rechercher un perk ou cliquer sur son icône.";
+        const armesAvecPerks = tousLesObjets.filter(function (objet) { return objet.type === "arme" && objet.perks.length; }).length;
+        statut.textContent = "Perks chargés pour " + armesAvecPerks + " arme(s) · " + nombrePlugs + " plugs actifs analysés. Clique sur une icône ou recherche un perk.";
       } catch (erreur) {
         statut.textContent = "Arsenal chargé, mais les perks des armes sont indisponibles : " + erreur.message;
       }
