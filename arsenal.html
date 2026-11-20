@@ -320,7 +320,7 @@
       if (perksVisibles.length) return perksVisibles;
       const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
       const vus = new Set();
-      return etats.filter(function (socket) { return socket && socket.plugHash && socket.isEnabled !== false; }).map(function (socket) {
+      return etats.filter(function (socket) { return socket && socket.plugHash; }).map(function (socket) {
         const hash = Number(socket.plugHash);
         const definition = cacheDefinitions.get(hash) || definitionsObjets[hash];
         const props = definition && definition.displayProperties || {};
@@ -343,9 +343,11 @@
         while (prochain < armesSansPerks.length) {
           const objet = armesSansPerks[prochain++];
           try {
-            const detail = await appelerBungie("/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/Item/" + objet.idInstance + "/?components=302");
+            const detail = await appelerBungie("/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/Item/" + objet.idInstance + "/?components=302,305");
             const donneesPerks = detail.perks && detail.perks.data;
             if (donneesPerks && donneesPerks.perks && donneesPerks.perks.length) perksParObjet[objet.idInstance] = donneesPerks;
+            const donneesSockets = detail.sockets && detail.sockets.data;
+            if (donneesSockets && donneesSockets.sockets && donneesSockets.sockets.length) socketsParObjet[objet.idInstance] = donneesSockets;
           } catch (_) { erreurs++; }
           await new Promise(function (resolve) { setTimeout(resolve, 100); });
         }
@@ -363,7 +365,7 @@
         references.forEach(function (reference) { if (reference && reference.perkHash && reference.visible !== false) hashsPerks.add(Number(reference.perkHash)); });
         const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
         etats.forEach(function (socket) {
-          if (socket && socket.plugHash && socket.isEnabled !== false) hashs.add(Number(socket.plugHash));
+          if (socket && socket.plugHash) hashs.add(Number(socket.plugHash));
         });
       }
       let cache = {};
@@ -449,7 +451,7 @@
         return;
       }
       const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
-      const hashs = Array.from(new Set(etats.filter(function (socket) { return socket && socket.plugHash && socket.isEnabled !== false; }).map(function (socket) { return Number(socket.plugHash); })));
+      const hashs = Array.from(new Set(etats.filter(function (socket) { return socket && socket.plugHash; }).map(function (socket) { return Number(socket.plugHash); })));
       const details = [];
       for (const hash of hashs) {
         let definition = definitionsObjets[hash] || cacheDefinitions.get(hash);
