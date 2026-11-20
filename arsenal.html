@@ -84,11 +84,34 @@
     let perksArmesCharges = false;
     const cacheDefinitions = new Map();
 
+    async function lireJSON(reponse, source) {
+      const texte = await reponse.text();
+      try { return JSON.parse(texte); }
+      catch (_) {
+        const type = reponse.headers.get("content-type") || "type inconnu";
+        throw new Error(source + " a renvoyé autre chose que du JSON (HTTP " + reponse.status + ", " + type + "). Vérifie l’URL du Worker ou réessaie dans quelques instants.");
+      }
+    }
+
     async function appelerBungie(chemin) {
       const reponse = await VIGIE_BUNGIE.fetchApi(chemin, { headers: { Authorization: "Bearer " + jeton } });
-      const donnees = await reponse.json();
+      const donnees = await lireJSON(reponse, "La route Bungie " + chemin);
+      if (!reponse.ok && donnees.ErrorStatus === "Success") throw new Error("La route Bungie " + chemin + " a échoué (HTTP " + reponse.status + ").");
       if (donnees.ErrorStatus !== "Success") throw new Error(donnees.ErrorStatus + " - " + donnees.Message);
       return donnees.Response;
+    }
+
+    async function chargerDefinitionsStatiques(cheminPrincipal, cheminSecours) {
+      const chemins = Array.from(new Set([cheminPrincipal, cheminSecours].filter(Boolean)));
+      let derniereErreur = null;
+      for (const chemin of chemins) {
+        try {
+          const reponse = await VIGIE_BUNGIE.fetchPublic(chemin);
+          if (!reponse.ok) throw new Error("HTTP " + reponse.status);
+          return await lireJSON(reponse, "Le manifeste " + chemin);
+        } catch (erreur) { derniereErreur = erreur; }
+      }
+      throw derniereErreur || new Error("Aucun manifeste Bungie disponible.");
     }
 
     function afficher() {
@@ -346,10 +369,11 @@
         compteActif = compte;
         const profil = await appelerBungie("/Destiny2/" + compte.membershipType + "/Profile/" + compte.membershipId + "/?components=102,200,201,205");
         const manifest = await appelerBungie("/Destiny2/Manifest/");
-        const chemin = manifest.jsonWorldComponentContentPaths.fr.DestinyInventoryItemLiteDefinition || manifest.jsonWorldComponentContentPaths.fr.DestinyInventoryItemDefinition;
-        const repManifest = await VIGIE_BUNGIE.fetchPublic(chemin);
-        if (!repManifest.ok) throw new Error("Impossible de charger les définitions d’objets Bungie.");
-        const definitions = await repManifest.json();
+        const cheminsManifest = manifest.jsonWorldComponentContentPaths.fr;
+        const definitions = await chargerDefinitionsStatiques(
+          cheminsManifest.DestinyInventoryItemLiteDefinition || cheminsManifest.DestinyInventoryItemDefinition,
+          cheminsManifest.DestinyInventoryItemDefinition
+        );
         definitionsObjets = definitions;
         const persos = profil.characters && profil.characters.data || {};
         for (const id in persos) {
