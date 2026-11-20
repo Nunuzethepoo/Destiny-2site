@@ -3,44 +3,89 @@
 <head>
   <meta charset="UTF-8">
   <title>Générateur de build</title>
-  <style>
-    body { font-family: sans-serif; padding: 20px; }
-    table { border-collapse: collapse; margin: 10px 0; }
-    td, th { padding: 4px 12px; text-align: left; }
-    input[type=number] { width: 70px; }
-    .resultat { border: 1px solid #aaa; border-radius: 8px; padding: 10px; margin: 12px 0; }
-    .piece { display: flex; align-items: center; margin: 3px 0; }
-    .piece img { width: 40px; height: 40px; margin-right: 10px; }
-    .stats { color: #555; }
-    #message { color: #b00020; }
-  </style>
   <link rel="stylesheet" href="vigie.css">
+  <style>
+    .builder-intro{max-width:740px;margin:-3px 0 18px;color:var(--muted);font-size:13px;line-height:1.7}
+    .load-status{margin:0 0 18px;padding:12px 15px;border:1px solid var(--line);border-left:3px solid var(--gold);background:#101720;color:#cbd4dc;border-radius:3px;font-size:12px}
+    .builder-grid{display:grid;grid-template-columns:minmax(230px,.78fr) minmax(0,1.22fr);gap:16px;align-items:start}
+    .builder-card{min-width:0;padding:clamp(16px,2.4vw,24px);border:1px solid var(--line);border-radius:5px;background:linear-gradient(145deg,#131b24,#0e141b 72%);box-shadow:0 14px 34px #0002}
+    .card-heading{display:flex;gap:12px;align-items:flex-start;margin-bottom:20px}
+    .card-step{display:grid;place-items:center;flex:0 0 32px;height:32px;border:1px solid #c99f5b88;color:var(--gold);font:700 11px ui-monospace,monospace}
+    .card-heading h2{margin:0 0 4px;color:#eef1f3;font:700 20px 'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase}
+    .card-heading p{margin:0;color:var(--muted);font-size:11px;line-height:1.55}
+    .builder-fields{display:grid;gap:14px}
+    .builder-control{display:grid;gap:7px;color:#c7d0d9;font-size:11px;font-weight:700}
+    .builder-control>span{color:#a9b5c1;letter-spacing:.06em;text-transform:uppercase}
+    .builder-control select,.stat-minimum{width:100%;min-height:42px;padding:10px 12px;border:1px solid #344251;border-radius:3px;background:#0a1016;color:#edf1f4;font:13px 'DM Sans',sans-serif}
+    .builder-control select:focus,.stat-minimum:focus{outline:2px solid #e6bb7280;border-color:var(--gold)}
+    .bonus-info{min-height:62px;padding:12px;border:1px solid #d4ad6840;border-radius:3px;background:#d4ad6809;color:#c7b999;font-size:11px;line-height:1.65}
+    .stats-table{width:100%;border-collapse:separate;border-spacing:0 7px;table-layout:fixed}
+    .stats-table th{padding:0 10px 5px;color:#81909e;text-align:left;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+    .stats-table th:first-child{width:28%}.stats-table th:nth-child(2){width:44%}.stats-table th:nth-child(3){width:28%}
+    .stats-table td{padding:10px;background:#0a1016;border-top:1px solid #27323e;border-bottom:1px solid #27323e}
+    .stats-table td:first-child{border-left:1px solid #27323e;border-radius:3px 0 0 3px;color:#e5e9ec;font-size:12px;font-weight:700}
+    .stats-table td:last-child{border-right:1px solid #27323e;border-radius:0 3px 3px 0}
+    .stat-range{display:flex;align-items:center;gap:9px}.stat-range input{width:100%;accent-color:var(--gold)}
+    .stat-range output{min-width:24px;color:var(--gold);text-align:center;font:700 12px ui-monospace,monospace}
+    .stat-minimum{min-height:38px;padding:7px 9px;text-align:center}
+    .builder-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 0 16px}
+    .builder-tools span{color:var(--muted);font-size:10px;line-height:1.5}
+    .builder-tools button{padding:8px 10px;border:1px solid #344251;border-radius:3px;background:transparent;color:#bac4ce;font-size:10px;cursor:pointer}
+    .builder-tools button:hover{border-color:var(--gold);color:var(--gold)}
+    #chercher{width:100%;min-height:46px;padding:13px 16px;border:0;border-radius:3px;background:var(--gold);color:#151515;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+    #chercher:hover{filter:brightness(1.08);transform:translateY(-1px)}
+    #message{margin:15px 0 0;padding:11px 13px;border:1px solid #d6756844;border-radius:3px;background:#d675680d;color:#efaaa0;font-size:11px;line-height:1.55}
+    #message:empty{display:none}
+    #resultats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px;margin:18px 0}
+    .resultat{padding:16px;border:1px solid var(--line);border-radius:4px;background:#111820}
+    .resultat h3{margin:0 0 12px;color:var(--gold);font:700 18px 'Barlow Condensed',sans-serif;text-transform:uppercase}
+    .piece{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid #ffffff0c;color:#d9e0e6;font-size:11px}
+    .piece img{width:38px;height:38px;object-fit:cover;border:1px solid #46515e;border-radius:2px}
+    .bonus-result{padding:10px 12px;border:1px solid #d4ad6840;background:#d4ad6809;color:#e5cc9d;font-size:11px;line-height:1.5}
+    .stats{margin:12px 0;color:#b4c2ce;font-size:11px;line-height:1.6}
+    .save-build{width:100%;min-height:40px;border:1px solid #b9975d;color:var(--gold);background:#d4ad680d;font-weight:700;cursor:pointer}
+    .save-build:hover{background:#d4ad6822}
+    .page-links{margin:22px 0 0;color:var(--muted);font-size:11px}.page-links a{margin-right:10px}
+    @media(max-width:820px){.builder-grid{grid-template-columns:1fr}.builder-card{padding:17px}}
+    @media(max-width:520px){.stats-table th:first-child{width:31%}.stats-table th:nth-child(2){width:41%}.stats-table th:nth-child(3){width:28%}.stats-table th{padding:0 5px 5px;font-size:8px}.stats-table td{padding:8px 6px}.stats-table td:first-child{font-size:10px}.stat-minimum{padding:6px 4px}.builder-tools{align-items:flex-start;flex-direction:column}}
+  </style>
   <script src="vigie-shell.js" defer></script>
 </head>
 <body>
   <h1>Générateur de build</h1>
-  <p id="statut">Chargement...</p>
+  <p class="builder-intro">Choisis ton Gardien, le bonus d’armure que tu veux activer et les statistiques à privilégier. VIGIE compare ensuite les pièces de ton coffre et de tes personnages.</p>
+  <p id="statut" class="load-status" role="status" aria-live="polite">Chargement de ton inventaire…</p>
 
-  <div id="formulaire" style="display:none">
-    <p>Classe :
-      <select id="choixClasse">
-        <option value="0">Titan</option>
-        <option value="1">Chasseur</option>
-        <option value="2">Arcaniste</option>
-      </select>
-    </p>
-    <p>Pièce exotique :
-      <select id="choixExotique"></select>
-    </p>
+  <div id="formulaire" class="builder-grid" style="display:none">
+    <section class="builder-card" aria-labelledby="options-title">
+      <div class="card-heading"><span class="card-step">01</span><div><h2 id="options-title">Ton équipement</h2><p>Définis les pièces et le bonus que le build doit conserver.</p></div></div>
+      <div class="builder-fields">
+        <label class="builder-control" for="choixClasse"><span>Classe</span>
+          <select id="choixClasse">
+            <option value="0">Titan</option>
+            <option value="1">Chasseur</option>
+            <option value="2">Arcaniste</option>
+          </select>
+        </label>
+        <label class="builder-control" for="choixExotique"><span>Pièce exotique</span><select id="choixExotique"></select></label>
+        <label class="builder-control" for="choixBonus"><span>Bonus d’armure souhaité</span>
+          <select id="choixBonus"><option value="">Aucun bonus imposé</option></select>
+        </label>
+        <p id="bonusInfo" class="bonus-info" aria-live="polite">Les bonus disponibles apparaîtront selon l’armure de ton inventaire. Les bonus demandent généralement 2 ou 4 pièces du même set.</p>
+      </div>
+    </section>
 
-    <table id="tableStats"></table>
-
-    <p><button id="chercher">Chercher les meilleurs sets</button></p>
-    <p id="message"></p>
+    <section class="builder-card" aria-labelledby="stats-title">
+      <div class="card-heading"><span class="card-step">02</span><div><h2 id="stats-title">Tes statistiques</h2><p>Monte la priorité des stats importantes. Un minimum est facultatif.</p></div></div>
+      <div class="builder-tools"><span>Priorité 0 = ignorée · 10 = priorité maximale</span><button type="button" id="prioritesEquilibrees">Réinitialiser à 5</button></div>
+      <table id="tableStats" class="stats-table"></table>
+      <p><button type="button" id="chercher">Trouver les meilleurs builds</button></p>
+      <p id="message" role="status" aria-live="polite"></p>
+    </section>
   </div>
 
-  <div id="resultats"></div>
-  <p><a href="armures.html">Mes armures</a> | <a href="equiper.html">Équiper un set</a> | <a href="profil.html">Profil</a></p>
+  <div id="resultats" aria-live="polite"></div>
+  <nav class="page-links" aria-label="Outils d’équipement"><a href="armures.html">Mes armures</a><a href="equiper.html">Équiper un build</a><a href="profil.html">Personnages</a></nav>
 
   <script src="bungie-api.js"></script>
   <script>
@@ -56,6 +101,8 @@
     const formulaire = document.getElementById("formulaire");
     const choixClasse = document.getElementById("choixClasse");
     const choixExotique = document.getElementById("choixExotique");
+    const choixBonus = document.getElementById("choixBonus");
+    const bonusInfo = document.getElementById("bonusInfo");
     const tableStats = document.getElementById("tableStats");
     const zoneResultats = document.getElementById("resultats");
 
@@ -70,6 +117,9 @@
     const STATS_ARMURE = [2996146975, 392767087, 1943323491, 1735777505, 144602215, 4244567218];
 
     let definitionsStats = {};
+    let definitionsSets = {};
+    let definitionsPerks = {};
+    let optionsBonus = new Map();
     let toutesLesArmures = [];
 
     // ---------- Parler à Bungie et charger les données ----------
@@ -85,20 +135,110 @@
       return donnees.Response;
     }
 
-    async function chargerDefinitions() {
+    async function chargerDefinitions(hashesArmure, progression) {
       const manifest = await appelerBungie("/Destiny2/Manifest/");
       const chemins = manifest.jsonWorldComponentContentPaths[LANGUE];
+      let cache = { version: manifest.version, objets: {}, sets: {}, perks: {}, stats: null };
+      try {
+        const enCache = JSON.parse(localStorage.getItem("vigieBuildDefsCache"));
+        if (enCache && enCache.version === manifest.version) cache = enCache;
+      } catch (_) {}
+      cache.objets = cache.objets || {};
+      cache.sets = cache.sets || {};
+      cache.perks = cache.perks || {};
+      async function lireFichier(chemin) {
+        if (!chemin) return {};
+        const reponse = await VIGIE_BUNGIE.fetchPublic(chemin);
+        if (!reponse.ok) throw new Error("Impossible de charger les données du manifeste Bungie.");
+        return await reponse.json();
+      }
 
-      const cheminObjets =
-        chemins.DestinyInventoryItemLiteDefinition ||
-        chemins.DestinyInventoryItemDefinition;
-      const reponseObjets = await VIGIE_BUNGIE.fetchPublic(cheminObjets);
-      const objets = await reponseObjets.json();
+      const stats = cache.stats || await lireFichier(chemins.DestinyStatDefinition);
+      const objets = Object.assign({}, cache.objets);
+      const hashesArmureManquants = hashesArmure.filter(function (hash) { return !objets[hash]; });
+      let prochain = 0;
+      let charges = 0;
+      const nombreWorkers = Math.min(4, hashesArmureManquants.length);
+      async function chargerUnWorker() {
+        while (true) {
+          const index = prochain++;
+          if (index >= hashesArmureManquants.length) return;
+          const hash = hashesArmureManquants[index];
+          objets[hash] = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/");
+          charges++;
+          if (progression) progression("armures", charges, hashesArmureManquants.length);
+          if (charges < hashesArmureManquants.length) await new Promise(function (resolve) { setTimeout(resolve, 100); });
+        }
+      }
+      await Promise.all(Array.from({ length: nombreWorkers }, chargerUnWorker));
 
-      const reponseStats = await VIGIE_BUNGIE.fetchPublic(chemins.DestinyStatDefinition);
-      const stats = await reponseStats.json();
+      async function chargerDefinitionsCiblees(type, hashes, cible, phase) {
+        let prochainHash = 0;
+        let chargesHash = 0;
+        const nombre = Math.min(4, hashes.length);
+        async function chargerWorker() {
+          while (true) {
+            const index = prochainHash++;
+            if (index >= hashes.length) return;
+            const hash = hashes[index];
+            cible[hash] = await appelerBungie("/Destiny2/Manifest/" + type + "/" + hash + "/");
+            chargesHash++;
+            if (progression) progression(phase, chargesHash, hashes.length);
+            if (chargesHash < hashes.length) await new Promise(function (resolve) { setTimeout(resolve, 100); });
+          }
+        }
+        await Promise.all(Array.from({ length: nombre }, chargerWorker));
+      }
 
-      return { objets: objets, stats: stats };
+      const sets = Object.assign({}, cache.sets);
+      const hashesSets = Array.from(new Set(hashesArmure.map(function (hash) {
+        const definition = objets[hash];
+        return Number(definition.equippingBlock && definition.equippingBlock.equipableItemSetHash) || 0;
+      }).filter(Boolean)));
+      const hashesSetsManquants = hashesSets.filter(function (hash) { return !sets[hash]; });
+      await chargerDefinitionsCiblees("DestinyEquipableItemSetDefinition", hashesSetsManquants, sets, "sets");
+
+      const perks = Object.assign({}, cache.perks);
+      const hashesPerks = Array.from(new Set(hashesSets.flatMap(function (hash) {
+        return (sets[hash] && sets[hash].setPerks || []).map(function (perk) { return Number(perk.sandboxPerkHash); }).filter(Boolean);
+      })));
+      const hashesPerksManquants = hashesPerks.filter(function (hash) { return !perks[hash]; });
+      await chargerDefinitionsCiblees("DestinySandboxPerkDefinition", hashesPerksManquants, perks, "perks");
+
+      const objetsEnCache = {};
+      const setsEnCache = {};
+      const perksEnCache = {};
+      hashesArmure.forEach(function (hash) {
+        const definition = objets[hash];
+        if (!definition) return;
+        objetsEnCache[hash] = {
+          displayProperties: {
+            name: definition.displayProperties && definition.displayProperties.name,
+            icon: definition.displayProperties && definition.displayProperties.icon
+          },
+          itemType: definition.itemType,
+          classType: definition.classType,
+          inventory: {
+            bucketTypeHash: definition.inventory && definition.inventory.bucketTypeHash,
+            tierType: definition.inventory && definition.inventory.tierType
+          },
+          equippingBlock: {
+            equipableItemSetHash: definition.equippingBlock && definition.equippingBlock.equipableItemSetHash
+          }
+        };
+      });
+      hashesSets.forEach(function (hash) { if (sets[hash]) setsEnCache[hash] = sets[hash]; });
+      hashesPerks.forEach(function (hash) { if (perks[hash]) perksEnCache[hash] = perks[hash]; });
+      try {
+        localStorage.setItem("vigieBuildDefsCache", JSON.stringify({
+          version: manifest.version,
+          objets: objetsEnCache,
+          sets: setsEnCache,
+          perks: perksEnCache,
+          stats: stats
+        }));
+      } catch (_) {}
+      return { objets: objets, stats: stats, sets: sets, perks: perks };
     }
 
     function nomStat(hash) {
@@ -145,20 +285,48 @@
       tableStats.innerHTML = "";
 
       const entete = document.createElement("tr");
-      entete.innerHTML = "<th>Stat</th><th>Importance (0 à 10)</th><th>Minimum voulu</th>";
+      entete.innerHTML = "<th scope=\"col\">Stat</th><th scope=\"col\">Priorité</th><th scope=\"col\">Minimum</th>";
       tableStats.appendChild(entete);
 
       STATS_ARMURE.forEach(function (hash, k) {
         const ligne = document.createElement("tr");
+        const nom = nomStat(hash);
 
         const celluleNom = document.createElement("td");
-        celluleNom.textContent = nomStat(hash);
+        celluleNom.textContent = nom;
 
         const cellulePoids = document.createElement("td");
-        cellulePoids.innerHTML = '<input type="number" id="poids' + k + '" min="0" max="10" value="0">';
+        const curseur = document.createElement("input");
+        curseur.type = "range";
+        curseur.id = "poids" + k;
+        curseur.min = "0";
+        curseur.max = "10";
+        curseur.value = "5";
+        curseur.setAttribute("aria-label", "Priorité de " + nom);
+        const valeur = document.createElement("output");
+        valeur.id = "valeurPoids" + k;
+        valeur.value = "5";
+        valeur.textContent = "5";
+        curseur.addEventListener("input", function () {
+          valeur.value = curseur.value;
+          valeur.textContent = curseur.value;
+        });
+        const curseurGroupe = document.createElement("div");
+        curseurGroupe.className = "stat-range";
+        curseurGroupe.append(curseur, valeur);
+        cellulePoids.appendChild(curseurGroupe);
 
         const celluleMin = document.createElement("td");
-        celluleMin.innerHTML = '<input type="number" id="min' + k + '" min="0" max="200" value="0">';
+        const minimum = document.createElement("input");
+        minimum.type = "number";
+        minimum.id = "min" + k;
+        minimum.min = "0";
+        minimum.max = "200";
+        minimum.value = "0";
+        minimum.placeholder = "0";
+        minimum.className = "stat-minimum";
+        minimum.setAttribute("aria-label", "Minimum souhaité pour " + nom);
+        celluleMin.appendChild(minimum);
 
         ligne.appendChild(celluleNom);
         ligne.appendChild(cellulePoids);
@@ -193,17 +361,104 @@
       }
     }
 
-    choixClasse.addEventListener("change", majExotiques);
+    function majBonus() {
+      const classe = Number(choixClasse.value);
+      const hashesDisponibles = new Set(toutesLesArmures
+        .filter(function (armure) { return armure.classe === classe && armure.setHash; })
+        .map(function (armure) { return armure.setHash; }));
+      const choixDisponibles = [];
+      optionsBonus = new Map();
+
+      hashesDisponibles.forEach(function (setHash) {
+        const definition = definitionsSets[setHash];
+        if (!definition || !Array.isArray(definition.setPerks)) return;
+        const parNombre = new Map();
+        definition.setPerks.forEach(function (perk) {
+          const nombre = Number(perk.requiredSetCount);
+          if (!nombre || nombre < 2 || nombre > 5) return;
+          const detail = definitionsPerks[perk.sandboxPerkHash];
+          const infos = parNombre.get(nombre) || [];
+          infos.push({
+            nom: (detail && detail.displayProperties && detail.displayProperties.name) || "Bonus d’armure",
+            description: (detail && detail.displayProperties && detail.displayProperties.description) || ""
+          });
+          parNombre.set(nombre, infos);
+        });
+
+        parNombre.forEach(function (perks, nombre) {
+          const setNom = (definition.displayProperties && definition.displayProperties.name) || "Set d’armure";
+          const key = setHash + ":" + nombre;
+          choixDisponibles.push({
+            key: key,
+            setHash: Number(setHash),
+            requiredCount: nombre,
+            setName: setNom,
+            perks: perks
+          });
+        });
+      });
+
+      choixDisponibles.sort(function (a, b) {
+        return a.setName.localeCompare(b.setName, "fr") || a.requiredCount - b.requiredCount;
+      });
+      choixBonus.innerHTML = "";
+      const aucun = document.createElement("option");
+      aucun.value = "";
+      aucun.textContent = "Aucun bonus imposé";
+      choixBonus.appendChild(aucun);
+      const groupes = new Map();
+      choixDisponibles.forEach(function (choix) {
+        let groupe = groupes.get(choix.setHash);
+        if (!groupe) {
+          groupe = document.createElement("optgroup");
+          groupe.label = choix.setName;
+          groupes.set(choix.setHash, groupe);
+          choixBonus.appendChild(groupe);
+        }
+        const option = document.createElement("option");
+        option.value = choix.key;
+        option.textContent = choix.requiredCount + " pièces — " + choix.perks.map(function (perk) { return perk.nom; }).join(" / ");
+        groupe.appendChild(option);
+        optionsBonus.set(choix.key, choix);
+      });
+      if (!choixDisponibles.length) {
+        bonusInfo.textContent = "Aucun bonus de set détecté dans les armures disponibles pour cette classe.";
+      } else {
+        bonusInfo.textContent = choixDisponibles.length + " bonus repérés dans ton inventaire. Choisis-en un pour exiger au moins le nombre de pièces indiqué.";
+      }
+    }
+
+    function afficherInfoBonus() {
+      const bonus = optionsBonus.get(choixBonus.value);
+      if (!bonus) {
+        bonusInfo.textContent = "Les bonus d’armure s’activent avec plusieurs pièces du même set. Choisis un bonus pour l’imposer au build.";
+        return;
+      }
+      bonusInfo.textContent = bonus.perks.map(function (perk) {
+        return perk.nom + (perk.description ? " — " + perk.description : "");
+      }).join("  ·  ") + " (au moins " + bonus.requiredCount + " pièces).";
+    }
+
+    choixClasse.addEventListener("change", function () { majExotiques(); majBonus(); });
+    choixBonus.addEventListener("change", afficherInfoBonus);
+    document.getElementById("prioritesEquilibrees").addEventListener("click", function () {
+      STATS_ARMURE.forEach(function (_, k) {
+        document.getElementById("poids" + k).value = "5";
+        document.getElementById("valeurPoids" + k).value = "5";
+        document.getElementById("valeurPoids" + k).textContent = "5";
+      });
+    });
 
     // ---------- La recherche ----------
 
     // Retire les pièces strictement moins bonnes qu'une autre partout
-    function retirerDominees(liste) {
+    function retirerDominees(liste, conserverSets) {
       return liste.filter(function (a) {
         const dominee = liste.some(function (b) {
           if (b === a) { return false; }
           if (a.piece.exotique !== b.piece.exotique) { return false; }
           if (a.piece.exotique && a.piece.nom !== b.piece.nom) { return false; }
+          if (conserverSets && a.piece.setHash !== b.piece.setHash) { return false; }
 
           let meilleureQuelquePart = false;
           for (let k = 0; k < a.v.length; k++) {
@@ -222,7 +477,9 @@
 
       const classe = Number(choixClasse.value);
       const exotique = choixExotique.value; // "peu", "aucune", ou un nom
+      const bonusChoisi = optionsBonus.get(choixBonus.value) || null;
       const nbStats = STATS_ARMURE.length;
+      message.textContent = "";
 
       // Ce que l'utilisateur a demandé
       const poids = [];
@@ -258,7 +515,7 @@
           return { piece: a, v: v, score: score };
         });
 
-        liste = retirerDominees(liste);
+        liste = retirerDominees(liste, Boolean(bonusChoisi));
         liste.sort(function (a, b) { return b.score - a.score; });
 
         if (liste.length === 0) {
@@ -271,6 +528,7 @@
       // 2. Les meilleurs résultats possibles pour les emplacements restants
       const N = ORDRE.length;
       const resteScore = new Array(N + 1).fill(0);
+      const restePiecesBonus = new Array(N + 1).fill(0);
       const resteStats = [];
       for (let i = 0; i <= N; i++) {
         resteStats.push(new Array(nbStats).fill(0));
@@ -287,6 +545,11 @@
         resteScore[i] = resteScore[i + 1] + meilleurScore;
         for (let k = 0; k < nbStats; k++) {
           resteStats[i][k] = resteStats[i + 1][k] + meilleursStats[k];
+        }
+        if (bonusChoisi && candidats[i].some(function (c) { return Number(c.piece.setHash) === bonusChoisi.setHash; })) {
+          restePiecesBonus[i] = restePiecesBonus[i + 1] + 1;
+        } else {
+          restePiecesBonus[i] = restePiecesBonus[i + 1];
         }
       }
 
@@ -310,13 +573,14 @@
         if (meilleurs.length > TOP) { meilleurs.pop(); }
       }
 
-      function explorer(i, totaux, scoreBrut, nbExotiques) {
+      function explorer(i, totaux, scoreBrut, nbExotiques, nbPiecesBonus) {
         if (interrompu) { return; }
         essais++;
         if (essais > LIMITE_ESSAIS) { interrompu = true; return; }
 
         if (i === N) {
           if (exotique !== "peu" && exotique !== "aucune" && nbExotiques !== 1) { return; }
+          if (bonusChoisi && nbPiecesBonus < bonusChoisi.requiredCount) { return; }
           for (let k = 0; k < nbStats; k++) {
             if (totaux[k] < minimums[k]) { return; }
           }
@@ -328,6 +592,7 @@
         for (let k = 0; k < nbStats; k++) {
           if (totaux[k] + resteStats[i][k] < minimums[k]) { return; }
         }
+        if (bonusChoisi && nbPiecesBonus + restePiecesBonus[i] < bonusChoisi.requiredCount) { return; }
         // Peut-on encore battre le moins bon des meilleurs résultats ?
         if (meilleurs.length === TOP && scoreBrut + resteScore[i] <= meilleurs[TOP - 1].score) {
           return;
@@ -337,21 +602,27 @@
           if (c.piece.exotique && nbExotiques === 1) { continue; } // une seule exotique
           choix[i] = c;
           const nouveaux = totaux.map(function (t, k) { return t + c.v[k]; });
-          explorer(i + 1, nouveaux, scoreBrut + c.score, nbExotiques + (c.piece.exotique ? 1 : 0));
+          explorer(
+            i + 1,
+            nouveaux,
+            scoreBrut + c.score,
+            nbExotiques + (c.piece.exotique ? 1 : 0),
+            nbPiecesBonus + (bonusChoisi && Number(c.piece.setHash) === bonusChoisi.setHash ? 1 : 0)
+          );
         }
       }
 
-      explorer(0, new Array(nbStats).fill(0), 0, 0);
-      afficherResultats(meilleurs, interrompu);
+      explorer(0, new Array(nbStats).fill(0), 0, 0, 0);
+      afficherResultats(meilleurs, interrompu, bonusChoisi);
     }
 
     // ---------- L'affichage des résultats ----------
 
-    function afficherResultats(meilleurs, interrompu) {
+    function afficherResultats(meilleurs, interrompu, bonusChoisi) {
       if (meilleurs.length === 0) {
         message.textContent = interrompu
           ? "Recherche interrompue : trop de combinaisons. Ajoute des minimums pour la réduire."
-          : "Aucun set ne respecte tes minimums. Baisse-les ou change la pièce exotique.";
+          : "Aucun build ne respecte ces critères. Essaie un bonus avec moins de pièces, une autre exotique ou des minimums plus bas.";
         return;
       }
 
@@ -366,8 +637,19 @@
         bloc.className = "resultat";
 
         const titre = document.createElement("h3");
-        titre.textContent = "Set n°" + (i + 1) + " - score " + resultat.score;
+        titre.textContent = "Build " + (i + 1) + " · score " + resultat.score;
         bloc.appendChild(titre);
+
+        if (bonusChoisi) {
+          const pieceCount = resultat.choix.filter(function (c) {
+            return Number(c.piece.setHash) === bonusChoisi.setHash;
+          }).length;
+          const bonusBadge = document.createElement("p");
+          bonusBadge.className = "bonus-result";
+          bonusBadge.textContent = bonusChoisi.setName + " — " + pieceCount + " pièces du set · bonus " +
+            bonusChoisi.requiredCount + " pièces : " + bonusChoisi.perks.map(function (perk) { return perk.nom; }).join(" / ");
+          bloc.appendChild(bonusBadge);
+        }
 
         for (const c of resultat.choix) {
           const ligne = document.createElement("div");
@@ -401,6 +683,8 @@
 
         // Sauvegarde dans les sets
         const bouton = document.createElement("button");
+        bouton.type = "button";
+        bouton.className = "save-build";
         bouton.textContent = "Sauvegarder ce set";
         bouton.addEventListener("click", function () {
           const nom = prompt("Nom du set ?");
@@ -409,7 +693,13 @@
           const sauvegardes = JSON.parse(localStorage.getItem("setsArmures")) || [];
           sauvegardes.push({
             nom: nom.trim(),
-            pieces: resultat.choix.map(function (c) { return c.piece; })
+            pieces: resultat.choix.map(function (c) { return c.piece; }),
+            bonus: bonusChoisi ? {
+              setHash: bonusChoisi.setHash,
+              requiredCount: bonusChoisi.requiredCount,
+              setName: bonusChoisi.setName,
+              perkNames: bonusChoisi.perks.map(function (perk) { return perk.nom; })
+            } : null
           });
           localStorage.setItem("setsArmures", JSON.stringify(sauvegardes));
 
@@ -458,6 +748,7 @@
         const objets = [];
         function ajouter(liste, lieu) {
           for (const objet of liste) {
+            if (objet.bucketHash && !EMPLACEMENTS_ARMURE[objet.bucketHash]) continue;
             objets.push({ objet: objet, lieu: lieu });
           }
         }
@@ -475,9 +766,18 @@
           }
         }
 
-        statut.textContent = "Téléchargement des définitions...";
-        const definitions = await chargerDefinitions();
+        const hashesArmure = Array.from(new Set(objets.map(function (element) {
+          return element.objet.itemHash;
+        }).filter(Boolean)));
+        statut.textContent = hashesArmure.length + " armures trouvées. Chargement des noms, bonus et statistiques…";
+        const definitions = await chargerDefinitions(hashesArmure, function (phase, charge, total) {
+          if (phase === "armures") statut.textContent = "Analyse des pièces d’armure : " + charge + " / " + total + "…";
+          else if (phase === "sets") statut.textContent = "Lecture des bonus d’armure : " + charge + " / " + total + " sets…";
+          else statut.textContent = "Chargement des descriptions de bonus : " + charge + " / " + total + "…";
+        });
         definitionsStats = definitions.stats;
+        definitionsSets = definitions.sets;
+        definitionsPerks = definitions.perks;
 
         for (const element of objets) {
           const definition = definitions.objets[element.objet.itemHash];
@@ -497,6 +797,7 @@
             emplacement: emplacement,
             classe: definition.classType,
             exotique: definition.inventory.tierType === 6,
+            setHash: Number(definition.equippingBlock && definition.equippingBlock.equipableItemSetHash) || 0,
             lieu: element.lieu,
             idInstance: element.objet.itemInstanceId,
             hash: element.objet.itemHash,
@@ -507,8 +808,9 @@
 
         construireTableau();
         majExotiques();
-        formulaire.style.display = "block";
-        statut.textContent = toutesLesArmures.length + " armures chargées. Règle tes critères puis lance la recherche.";
+        majBonus();
+        formulaire.style.display = "grid";
+        statut.textContent = toutesLesArmures.length + " armures prêtes. Ajuste les priorités, le bonus ou l’exotique puis lance la recherche.";
       } catch (erreur) {
         statut.textContent = "Erreur : " + erreur.message;
       }
