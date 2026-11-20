@@ -53,7 +53,7 @@
 </head>
 <body>
   <h1>Générateur de build</h1>
-  <p class="builder-intro">Choisis ton Gardien, le bonus d’armure que tu veux activer et les statistiques à privilégier. VIGIE compare ensuite les pièces de ton coffre et de tes personnages.</p>
+  <p class="builder-intro">Choisis ton Gardien, le bonus d’armure, les statistiques à privilégier et si le coffre doit être pris en compte. VIGIE compare les pièces et sélectionne automatiquement les mods de stats disponibles.</p>
   <p id="statut" class="load-status" role="status" aria-live="polite">Chargement de ton inventaire…</p>
 
   <div id="formulaire" class="builder-grid" style="display:none">
@@ -70,6 +70,10 @@
         <label class="builder-control" for="choixExotique"><span>Pièce exotique</span><select id="choixExotique"></select></label>
         <label class="builder-control" for="choixBonus"><span>Bonus d’armure souhaité</span>
           <select id="choixBonus"><option value="">Aucun bonus imposé</option></select>
+        </label>
+        <label class="builder-control" style="display:flex;grid-template-columns:auto 1fr;align-items:start;gap:9px">
+          <input id="inclureCoffre" type="checkbox" checked style="accent-color:var(--gold);margin-top:3px">
+          <span style="text-transform:none;letter-spacing:0">Inclure aussi les armures du coffre</span>
         </label>
         <p id="bonusInfo" class="bonus-info" aria-live="polite">Les bonus disponibles apparaîtront selon l’armure de ton inventaire. Les bonus demandent généralement 2 ou 4 pièces du même set.</p>
       </div>
@@ -121,6 +125,10 @@
     let definitionsPerks = {};
     let optionsBonus = new Map();
     let toutesLesArmures = [];
+    let socketParInstance = {};
+    let definitionMods = {};
+    let characterPlugSets = {};
+    let profilePlugSets = {};
 
     // ---------- Parler à Bungie et charger les données ----------
 
@@ -155,7 +163,7 @@
 
       const stats = cache.stats || await lireFichier(chemins.DestinyStatDefinition);
       const objets = Object.assign({}, cache.objets);
-      const hashesArmureManquants = hashesArmure.filter(function (hash) { return !objets[hash]; });
+      const hashesArmureManquants = hashesArmure.filter(function (hash) { return !objets[hash] || !objets[hash].sockets; });
       let prochain = 0;
       let charges = 0;
       const nombreWorkers = Math.min(4, hashesArmureManquants.length);
@@ -224,7 +232,8 @@
           },
           equippingBlock: {
             equipableItemSetHash: definition.equippingBlock && definition.equippingBlock.equipableItemSetHash
-          }
+          },
+          sockets: definition.sockets
         };
       });
       hashesSets.forEach(function (hash) { if (sets[hash]) setsEnCache[hash] = sets[hash]; });
@@ -239,6 +248,78 @@
         }));
       } catch (_) {}
       return { objets: objets, stats: stats, sets: sets, perks: perks };
+    }
+
+    function plugsPourSocket(socket, hashSet) {
+      const resultat = [];
+      const listes = [];
+      if (socket && Array.isArray(socket.reusablePlugItems)) listes.push(socket.reusablePlugItems);
+      if (hashSet && profilePlugSets[hashSet]) listes.push(profilePlugSets[hashSet]);
+      for (const id in characterPlugSets) {
+        const liste = characterPlugSets[id] && characterPlugSets[id][hashSet];
+        if (liste) listes.push(liste);
+      }
+      for (const liste of listes) for (const plug of liste) {
+        const hash = Number(plug.plugItemHash || plug.itemHash);
+        if (hash && (plug.canInsert !== false) && resultat.indexOf(hash) === -1) resultat.push(hash);
+      }
+      if (socket && socket.plugHash && resultat.indexOf(Number(socket.plugHash)) === -1) resultat.push(Number(socket.plugHash));
+      return resultat;
+    }
+
+    async function chargerDefinitionsMods(hashes) {
+      const manquants = hashes.filter(function (hash) { return !definitionMods[hash]; });
+      let prochain = 0;
+      async function worker() {
+        while (prochain < manquants.length) {
+          const hash = manquants[prochain++];
+          try { definitionMods[hash] = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/"); }
+          catch (_) { definitionMods[hash] = null; }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(4, manquants.length) }, worker));
+    }
+
+    function statsDuMod(hash) {
+      const definition = definitionMods[hash];
+      const resultat = new Array(STATS_ARMURE.length).fill(0);
+      if (!definition) return resultat;
+      for (const stat of (definition.investmentStats || [])) {
+        const index = STATS_ARMURE.indexOf(Number(stat.statTypeHash));
+        if (index !== -1 && !stat.isConditionallyActive) resultat[index] += Number(stat.value) || 0;
+      }
+      return resultat;
+    }
+
+    function meilleurPlanMods(piece, poids) {
+      const socketData = socketParInstance[piece.idInstance] || {};
+      const sockets = socketData.sockets || [];
+      const plan = [];
+      const bonus = new Array(STATS_ARMURE.length).fill(0);
+      let energie = 0;
+      const capacite = Number(piece.capaciteEnergie) || 10;
+      for (let i = 0; i < sockets.length; i++) {
+        const socket = sockets[i];
+        const entree = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries[i];
+        if (!entree || !entree.reusablePlugSetHash) continue;
+        let meilleur = null;
+        for (const hash of plugsPourSocket(socket, entree.reusablePlugSetHash)) {
+          const definition = definitionMods[hash];
+          if (!definition || !definition.plug) continue;
+          const stats = statsDuMod(hash);
+          const valeur = stats.reduce(function (s, v, k) { return s + v * poids[k]; }, 0);
+          if (valeur <= 0 || !stats.some(function (v) { return v > 0; })) continue;
+          const cout = Number(definition.plug.energyCost && definition.plug.energyCost.energyCost) || 0;
+          if (energie + cout > capacite) continue;
+          if (!meilleur || valeur > meilleur.valeur) meilleur = { hash: hash, stats: stats, valeur: valeur, cout: cout };
+        }
+        if (meilleur) {
+          plan.push({ socketIndex: i, plugItemHash: meilleur.hash });
+          energie += meilleur.cout;
+          meilleur.stats.forEach(function (v, k) { bonus[k] += v; });
+        }
+      }
+      return { plan: plan, bonus: bonus };
     }
 
     function nomStat(hash) {
@@ -351,7 +432,7 @@
 
       const noms = [];
       for (const armure of toutesLesArmures) {
-        if (armure.exotique && armure.classe === classe && noms.indexOf(armure.nom) === -1) {
+        if (armure.exotique && armure.classe === classe && (document.getElementById("inclureCoffre").checked || armure.lieu !== "Coffre") && noms.indexOf(armure.nom) === -1) {
           noms.push(armure.nom);
         }
       }
@@ -364,7 +445,7 @@
     function majBonus() {
       const classe = Number(choixClasse.value);
       const hashesDisponibles = new Set(toutesLesArmures
-        .filter(function (armure) { return armure.classe === classe && armure.setHash; })
+        .filter(function (armure) { return armure.classe === classe && armure.setHash && (document.getElementById("inclureCoffre").checked || armure.lieu !== "Coffre"); })
         .map(function (armure) { return armure.setHash; }));
       const choixDisponibles = [];
       optionsBonus = new Map();
@@ -440,6 +521,7 @@
     }
 
     choixClasse.addEventListener("change", function () { majExotiques(); majBonus(); });
+    document.getElementById("inclureCoffre").addEventListener("change", function () { majExotiques(); majBonus(); });
     choixBonus.addEventListener("change", afficherInfoBonus);
     document.getElementById("prioritesEquilibrees").addEventListener("click", function () {
       STATS_ARMURE.forEach(function (_, k) {
@@ -471,7 +553,7 @@
       });
     }
 
-    function chercher() {
+    async function chercher() {
       message.textContent = "";
       zoneResultats.innerHTML = "";
 
@@ -494,25 +576,42 @@
         return;
       }
 
+      const hashesMods = [];
+      for (const piece of toutesLesArmures) {
+        const socketData = socketParInstance[piece.idInstance] || {};
+        const sockets = socketData.sockets || [];
+        const definition = piece.definition;
+        for (let i = 0; i < sockets.length; i++) {
+          const entree = definition && definition.sockets && definition.sockets.socketEntries[i];
+          if (!entree || !entree.reusablePlugSetHash) continue;
+          hashesMods.push.apply(hashesMods, plugsPourSocket(sockets[i], entree.reusablePlugSetHash));
+        }
+      }
+      message.textContent = "Analyse des mods de statistiques disponibles…";
+      await chargerDefinitionsMods(Array.from(new Set(hashesMods)));
+      message.textContent = "";
+
       // 1. Les pièces candidates pour chaque emplacement
       const candidats = [];
       for (const emplacement of ORDRE) {
         let liste = toutesLesArmures.filter(function (a) {
-          if (a.classe !== classe || a.emplacement !== emplacement) { return false; }
+          if (a.classe !== classe || a.emplacement !== emplacement || (!document.getElementById("inclureCoffre").checked && a.lieu === "Coffre")) { return false; }
           if (exotique === "aucune") { return !a.exotique; }
           if (exotique !== "peu") { return !a.exotique || a.nom === exotique; }
           return true;
         });
 
         liste = liste.map(function (a) {
-          const v = STATS_ARMURE.map(function (hash) {
+          const base = STATS_ARMURE.map(function (hash) {
             return (a.stats && a.stats[hash]) || 0;
           });
+          const mods = meilleurPlanMods(a, poids);
+          const v = base.map(function (value, k) { return value + mods.bonus[k]; });
           let score = 0;
           for (let k = 0; k < nbStats; k++) {
             score += v[k] * poids[k];
           }
-          return { piece: a, v: v, score: score };
+          return { piece: a, v: v, score: score, modPlan: mods.plan };
         });
 
         liste = retirerDominees(liste, Boolean(bonusChoisi));
@@ -662,6 +761,13 @@
           texte.textContent =
             c.piece.emplacement + " : " + c.piece.nom +
             (c.piece.exotique ? " (exotique)" : "") + " - " + c.piece.lieu;
+          if (c.modPlan && c.modPlan.length) {
+            const nomsMods = c.modPlan.map(function (mod) {
+              const definition = definitionMods[mod.plugItemHash];
+              return definition && definition.displayProperties && definition.displayProperties.name;
+            }).filter(Boolean);
+            texte.textContent += " · mods auto : " + (nomsMods.join(", ") || c.modPlan.length + " mod(s) de stats");
+          }
 
           ligne.appendChild(image);
           ligne.appendChild(texte);
@@ -693,7 +799,7 @@
           const sauvegardes = JSON.parse(localStorage.getItem("setsArmures")) || [];
           sauvegardes.push({
             nom: nom.trim(),
-            pieces: resultat.choix.map(function (c) { return c.piece; }),
+            pieces: resultat.choix.map(function (c) { return Object.assign({}, c.piece, { mods: c.modPlan || [] }); }),
             bonus: bonusChoisi ? {
               setHash: bonusChoisi.setHash,
               requiredCount: bonusChoisi.requiredCount,
@@ -737,13 +843,18 @@
           }) || memberships.destinyMemberships[0];
 
         statut.textContent = "Chargement de ton inventaire...";
-        const profil = await appelerBungie(
+      const profil = await appelerBungie(
           "/Destiny2/" + compte.membershipType + "/Profile/" + compte.membershipId +
-          "/?components=102,201,205,304"
+          "/?components=102,201,205,300,305"
         );
+        profilePlugSets = (profil.profilePlugSets && profil.profilePlugSets.data && profil.profilePlugSets.data.plugs) || {};
+        characterPlugSets = {};
+        const plugDataPersos = profil.characterPlugSets && profil.characterPlugSets.data || {};
+        for (const idPerso in plugDataPersos) characterPlugSets[idPerso] = plugDataPersos[idPerso].plugs || {};
 
         const statsObjets =
           (profil.itemComponents && profil.itemComponents.stats && profil.itemComponents.stats.data) || {};
+        socketParInstance = (profil.itemComponents && profil.itemComponents.sockets && profil.itemComponents.sockets.data) || {};
 
         const objets = [];
         function ajouter(liste, lieu) {
@@ -803,6 +914,8 @@
             hash: element.objet.itemHash,
             stats: stats,
             total: totalDesStats(stats)
+            ,definition: definition,
+            capaciteEnergie: Number(profil.itemComponents && profil.itemComponents.instances && profil.itemComponents.instances.data && profil.itemComponents.instances.data[element.objet.itemInstanceId] && profil.itemComponents.instances.data[element.objet.itemInstanceId].energy && profil.itemComponents.instances.data[element.objet.itemInstanceId].energy.energyCapacity) || 10
           });
         }
 

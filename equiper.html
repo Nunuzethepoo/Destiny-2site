@@ -143,7 +143,7 @@
 
         ecrire("Lecture de ton inventaire actuel...");
         const profil = await appelerBungie(
-          "/Destiny2/" + compte.membershipType + "/Profile/" + compte.membershipId + "/?components=102,201,205"
+          "/Destiny2/" + compte.membershipType + "/Profile/" + compte.membershipId + "/?components=102,201,205,305"
         );
         const lieux = trouverLieux(profil);
 
@@ -185,18 +185,38 @@
           }
         }
 
-        if (aEquiper.length === 0) {
-          ecrire("Rien à équiper.");
-          return;
+        if (aEquiper.length) {
+          ecrire("Envoi de l'ordre d'équipement...");
+          const resultat = await envoyerBungie("/Destiny2/Actions/Items/EquipItems/", {
+            itemIds: aEquiper,
+            characterId: idPersonnage,
+            membershipType: compte.membershipType
+          });
+          ecrire("Réponse de Bungie : " + JSON.stringify(resultat));
+          await pause(500);
         }
 
-        ecrire("Envoi de l'ordre d'équipement...");
-        const resultat = await envoyerBungie("/Destiny2/Actions/Items/EquipItems/", {
-          itemIds: aEquiper,
-          characterId: idPersonnage,
-          membershipType: compte.membershipType
-        });
-        ecrire("Réponse de Bungie : " + JSON.stringify(resultat));
+        const sockets = (profil.itemComponents && profil.itemComponents.sockets && profil.itemComponents.sockets.data) || {};
+        let modsAppliques = 0;
+        for (const piece of set.pieces) {
+          for (const mod of (piece.mods || [])) {
+            try {
+              const actuel = sockets[piece.idInstance] && sockets[piece.idInstance].sockets && sockets[piece.idInstance].sockets[mod.socketIndex];
+              if (actuel && Number(actuel.plugHash) === Number(mod.plugItemHash)) continue;
+              await envoyerBungie("/Destiny2/Actions/Items/InsertSocketPlugFree/", {
+                plug: { socketIndex: mod.socketIndex, socketArrayType: 0, plugItemHash: mod.plugItemHash },
+                itemId: piece.idInstance,
+                characterId: idPersonnage,
+                membershipType: compte.membershipType
+              });
+              modsAppliques++;
+              await pause(500);
+            } catch (erreur) {
+              ecrire(piece.nom + " : mod non appliqué (" + erreur.message + "). Vérifie l'énergie ou la prise.");
+            }
+          }
+        }
+        ecrire(aEquiper.length || modsAppliques ? "Terminé : " + aEquiper.length + " pièce(s) équipée(s), " + modsAppliques + " mod(s) appliqué(s)." : "Aucun changement nécessaire.");
       } catch (erreur) {
         ecrire("Erreur : " + erreur.message);
       }
