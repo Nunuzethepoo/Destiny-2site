@@ -4,7 +4,7 @@
   const SKIP_TABS = new Set(["Shopping List", "Archetypes", "Experimental", "Exotic Armor", "Builds", "Perks", "Origin Traits", "Set Bonuses", "Artifact Mods", "Fragments", "Aspects", "Subclasses", "Encounters", "Transitions", "Raid Mods"]);
   const BUCKETS_ARMES = new Set([1498876634, 2465295065, 953998645]);
   const TTL = 30 * 60 * 1000;
-  const CACHE_KEY = "vigieCollectionGodRollsV1";
+  const CACHE_KEY = "vigieCollectionGodRollsV2";
   const PAGE_SIZE = 60;
   const el = {
     status: document.getElementById("collectionStatus"),
@@ -27,6 +27,18 @@
       return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character];
     });
   }
+
+  const TYPE_FR = {
+    "Auto Rifle": "Fusil automatique", "Combat Bow": "Arc de combat", "Bow": "Arc de combat",
+    "Hand Cannon": "Revolver", "Pulse Rifle": "Fusil à impulsion", "Scout Rifle": "Fusil d’éclaireur",
+    "Sidearm": "Arme de poing", "Submachine Gun": "Pistolet-mitrailleur", "Shotgun": "Fusil à pompe",
+    "Fusion Rifle": "Fusil à fusion", "Sniper Rifle": "Fusil de précision", "Trace Rifle": "Fusil à rayon",
+    "Grenade Launcher": "Lance-grenades", "Special Ammo Grenade Launcher": "Lance-grenades spécial",
+    "Rocket Launcher": "Lance-roquettes", "Machine Gun": "Mitrailleuse", "Sword": "Épée",
+    "Linear Fusion Rifle": "Fusil à fusion linéaire", "Glaive": "Glaive"
+  };
+  const COL_FR = { "Barrel": "Canon", "Mag": "Chargeur", "Perk 1": "Trait · colonne 1", "Perk 2": "Trait · colonne 2", "Origin Trait": "Trait d’origine" };
+  let traductionsPerks = {};
 
   function csvRows(text) {
     const rows = [];
@@ -128,25 +140,45 @@
     const manifestData = await manifestResponse.json();
     if (!manifestResponse.ok || manifestData.ErrorStatus !== "Success") throw new Error(manifestData.Message || "Le manifeste Bungie est indisponible.");
     const manifest = manifestData.Response;
-    const definitionsPath = manifest.jsonWorldComponentContentPaths.en.DestinyInventoryItemLiteDefinition || manifest.jsonWorldComponentContentPaths.en.DestinyInventoryItemDefinition;
-    if (!definitionsPath) throw new Error("Bungie n’a pas renvoyé le catalogue des armes.");
-    const response = await VIGIE_BUNGIE.fetchPublic(definitionsPath);
-    if (!response.ok) throw new Error("Téléchargement du catalogue Bungie impossible (HTTP " + response.status + ").");
-    const definitions = await response.json();
-    return Object.values(definitions).filter(function (definition) {
+    const type = "DestinyInventoryItemLiteDefinition";
+    const pathEn = manifest.jsonWorldComponentContentPaths.en[type] || manifest.jsonWorldComponentContentPaths.en.DestinyInventoryItemDefinition;
+    const pathFr = manifest.jsonWorldComponentContentPaths.fr && (manifest.jsonWorldComponentContentPaths.fr[type] || manifest.jsonWorldComponentContentPaths.fr.DestinyInventoryItemDefinition);
+    if (!pathEn) throw new Error("Bungie n’a pas renvoyé le catalogue des armes.");
+    async function chargerDefinitions(path) {
+      const response = await VIGIE_BUNGIE.fetchPublic(path);
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return response.json();
+    }
+    const [defsEn, defsFr] = await Promise.all([
+      chargerDefinitions(pathEn),
+      pathFr ? chargerDefinitions(pathFr).catch(function () { return {}; }) : Promise.resolve({})
+    ]);
+    const nomsParHash = {};
+    const parNomAnglais = {};
+    Object.keys(defsEn).forEach(function (hash) {
+      const english = defsEn[hash];
+      const french = defsFr[hash];
+      if (!english || !english.displayProperties || !english.displayProperties.name || !french || !french.displayProperties || !french.displayProperties.name) return;
+      nomsParHash[hash] = french.displayProperties.name;
+      const englishKey = normalize(english.displayProperties.name);
+      if (!parNomAnglais[englishKey]) parNomAnglais[englishKey] = french.displayProperties.name;
+    });
+    traductionsPerks = parNomAnglais;
+    return Object.values(defsEn).filter(function (definition) {
       return definition && definition.itemType === 3 && definition.inventory && BUCKETS_ARMES.has(Number(definition.inventory.bucketTypeHash)) && definition.displayProperties && definition.displayProperties.name && !definition.redacted;
     }).map(function (definition) {
       return {
         hash: Number(definition.hash),
-        name: definition.displayProperties.name,
+        nameEn: definition.displayProperties.name,
+        name: nomsParHash[String(definition.hash)] || definition.displayProperties.name,
         icon: definition.displayProperties.icon || "",
-        type: definition.itemTypeDisplayName || "Arme",
+        type: TYPE_FR[definition.itemTypeDisplayName] || definition.itemTypeDisplayName || "Arme",
         exotic: Number(definition.inventory.tierType) === 6
       };
     }).sort(function (a, b) { return a.name.localeCompare(b.name, "en"); });
   }
 
-  function addRecommendations(catalog, recommendations) {
+  function addRecommendations(catalog, recommendations, translations) {
     const byName = new Map();
     recommendations.forEach(function (recommendation) {
       const key = normalize(recommendation.name);
@@ -159,18 +191,40 @@
       }
     });
     return catalog.map(function (weapon) {
-      const key = normalize(weapon.name);
-      const withoutVariant = normalize(weapon.name.replace(/\s*\([^)]*\)\s*$/, ""));
-      weapon.rolls = byName.get(key) || byName.get(withoutVariant) || [];
+      const englishName = weapon.nameEn || weapon.name;
+      const key = normalize(englishName);
+      const withoutVariant = normalize(englishName.replace(/\s*\([^)]*\)\s*$/, ""));
+      weapon.rolls = (byName.get(key) || byName.get(withoutVariant) || []).map(function (roll) {
+        return Object.assign({}, roll, { perks: roll.perks.map(function (perk) {
+          return Object.assign({}, perk, {
+            label: COL_FR[perk.label] || perk.label,
+            optionsEn: perk.options.slice(),
+            options: perk.options.map(function (option) { return translations[normalize(option)] || option; })
+          });
+        }) });
+      });
       return weapon;
     });
   }
 
+  function garderTraductionsUtiles(recommendations, toutesLesTraductions) {
+    const utiles = {};
+    recommendations.forEach(function (recommendation) {
+      (recommendation.perks || []).forEach(function (perk) {
+        (perk.options || []).forEach(function (option) {
+          const key = normalize(option);
+          if (toutesLesTraductions[key]) utiles[key] = toutesLesTraductions[key];
+        });
+      });
+    });
+    traductionsPerks = utiles;
+  }
+
   function rollMarkup(roll) {
-    const main = ["Perk 1", "Perk 2"];
+    const main = ["Trait · colonne 1", "Trait · colonne 2"];
     const columns = main.map(function (label) {
       const perk = roll.perks.find(function (entry) { return entry.label === label; });
-      return '<div class="perk-column"><b>' + escapeHtml(label === "Perk 1" ? "Trait · colonne 1" : "Trait · colonne 2") + '</b>' + escapeHtml(perk ? perk.options.join(" / ") : "—") + '</div>';
+      return '<div class="perk-column"><b>' + escapeHtml(label) + '</b>' + escapeHtml(perk ? perk.options.join(" / ") : "—") + '</div>';
     }).join("");
     const extras = roll.perks.filter(function (entry) { return !main.includes(entry.label); }).map(function (entry) {
       return entry.label + ": " + entry.options.join(" / ");
@@ -187,8 +241,8 @@
       if (type && weapon.type !== type) return false;
       if (onlyRecommended && !weapon.rolls.length) return false;
       if (!query) return true;
-      const text = [weapon.name, weapon.type, ...(weapon.rolls || []).flatMap(function (roll) {
-        return [roll.tier, roll.rank, roll.notes, roll.variant, ...roll.perks.flatMap(function (perk) { return [perk.label, ...perk.options]; })];
+      const text = [weapon.name, weapon.nameEn, weapon.type, ...(weapon.rolls || []).flatMap(function (roll) {
+        return [roll.tier, roll.rank, roll.notes, roll.variant, ...roll.perks.flatMap(function (perk) { return [perk.label, ...perk.options, ...(perk.optionsEn || [])]; })];
       })].join(" ");
       return normalize(text).includes(query);
     });
@@ -221,7 +275,8 @@
     try {
       const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
       if (cached && Date.now() - cached.savedAt < TTL && Array.isArray(cached.catalog) && Array.isArray(cached.recommendations)) {
-        weapons = addRecommendations(cached.catalog, cached.recommendations);
+        traductionsPerks = cached.perkTranslations || {};
+        weapons = addRecommendations(cached.catalog, cached.recommendations, traductionsPerks);
         el.status.textContent = "Catalogue en cache · mise à jour des recommandations dans " + Math.max(1, Math.round((TTL - (Date.now() - cached.savedAt)) / 60000)) + " min.";
         fillTypes(); render();
         return;
@@ -237,9 +292,10 @@
       el.results.innerHTML = '<p class="weapon-empty">Le catalogue Bungie et la liste des god rolls sont indisponibles.</p>';
       return;
     }
-    weapons = addRecommendations(catalog, recommendations);
+    garderTraductionsUtiles(recommendations, traductionsPerks);
+    weapons = addRecommendations(catalog, recommendations, traductionsPerks);
     fillTypes(); render();
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), catalog: catalog, recommendations: recommendations })); } catch (_) {}
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), catalog: catalog, recommendations: recommendations, perkTranslations: traductionsPerks })); } catch (_) {}
     const avertissements = [];
     if (results[0].status === "rejected") avertissements.push("catalogue Bungie indisponible");
     if (results[1].status === "rejected") avertissements.push("liste communautaire indisponible");
