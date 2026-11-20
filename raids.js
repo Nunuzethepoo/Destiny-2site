@@ -60,6 +60,28 @@
 
   const raidSelect=document.getElementById('raidSelect'), encounterSelect=document.getElementById('encounterSelect'), nav=document.getElementById('encounterNav');
   let ri=0, ei=0;
+  const mapSources={
+    "Dernier Vœu":"https://github.com/bumzu/DestinyRaidImages/tree/main/Last%20Wish",
+    "Jardin du Salut":"https://github.com/bumzu/DestinyRaidImages/tree/main/Garden%20of%20Salvation",
+    "Crypte de la Pierre Profonde":"https://github.com/bumzu/DestinyRaidImages/tree/main/Deep%20Stone%20Crypt",
+    "Caveau de Verre":"https://github.com/bumzu/DestinyRaidImages/tree/main/Vault%20of%20Glass",
+    "La Chute du Roi":"https://github.com/bumzu/DestinyRaidImages/tree/main/King's%20Fall",
+    "Serment du Disciple":"https://github.com/bumzu/DestinyRaidImages/tree/main/Vow%20of%20the%20Disciple",
+    "Racine des Cauchemars":"https://github.com/bumzu/DestinyRaidImages/tree/main/Root%20of%20Nightmares",
+    "La Fin de Cropta":"https://github.com/bumzu/DestinyRaidImages/tree/main/Crota's%20End",
+    "Salvation’s Edge":"https://www.forced-to-wipe.com/raid-resources/salvations-edge",
+    "Le Désert Perpétuel":"https://gobble.tools/pages/desert-perpetual-raid-guide/"
+  };
+  function noviceExplanation(step){
+    const tips=[];
+    if(/symbole|glyphe|oracle/i.test(step)) tips.push("Lis le pictogramme ou l’ordre avant d’agir. Annonce-le avec le nom choisi par l’équipe ; ne devine pas et attends la confirmation du lecteur.");
+    if(/buff|aura|brand|calice|relique|regard/i.test(step)) tips.push("C’est un effet ou un objet de rôle : surveille son icône et son compte à rebours. Dis à voix haute quand tu l’as, quand tu le passes et quand il est consommé.");
+    if(/plaque|relais|conflux|nœud|noeud|borne/i.test(step)) tips.push("Place-toi sur ou près du point indiqué jusqu’à ce que l’activation soit visible. Ne quitte pas ta position avant l’annonce de fin.");
+    if(/ramasse|collect|mote|chronon|bombe|forme/i.test(step)) tips.push("Vérifie que l’objet apparaît bien dans ton inventaire/effet avant de partir. Annonce combien tu portes et où tu vas le déposer.");
+    if(/dégâts|dégats|vulnérable|bouclier|boss/i.test(step)) tips.push("Attends que l’équipe confirme l’ouverture des dégâts, vise la partie annoncée et garde une capacité de survie pour l’attaque suivante.");
+    if(!tips.length) tips.push("Élimine d’abord les ennemis qui bloquent l’objectif. Reste avec ton binôme, annonce ce que tu vois et attends que l’escouade confirme l’étape avant d’avancer.");
+    return tips.join(' ');
+  }
   function svg(enc, step, total){
     const labels=["ENTRÉE","RELAIS A","MÉCANIQUE","RELAIS B","BOSS / OBJECTIF","SORTIE / DPS"], p=[[55,145],[150,78],[260,145],[370,78],[490,145],[370,218]], c=['#8bd8dc','#e6bb72','#c7a2ff','#e6bb72','#e18378','#8bd8dc'];
     const active=Math.min(step+1,5), links=[[0,1],[1,2],[2,3],[3,4],[4,5],[1,3],[2,4]].map(([a,b])=>`<line x1="${p[a][0]}" y1="${p[a][1]}" x2="${p[b][0]}" y2="${p[b][1]}" stroke="${a===active||b===active?'#e6bb72':'#52606d'}" stroke-width="${a===active||b===active?3:1.5}" stroke-dasharray="5 5"/>`).join('');
@@ -70,9 +92,9 @@
     const r=raids[ri],e=r.e[ei]; document.getElementById('raidTitle').textContent=r.n; document.getElementById('raidMeta').textContent=`${r.e.length} rencontres · stratégie standard`;
     encounterSelect.innerHTML=r.e.map((x,i)=>`<option value="${i}">${x[0]}</option>`).join(''); encounterSelect.value=ei;
     nav.innerHTML=r.e.map((x,i)=>`<button type="button" data-i="${i}" aria-pressed="${i===ei}">${x[0]}</button>`).join('');
-    const steps=e[3].split('. ').filter(Boolean);
-    document.getElementById('encounterCard').innerHTML=`<h2>${e[0]}</h2><p class="encounter-lead">${e[1]}</p><div class="roles"><div class="role"><b>Répartition suggérée</b><span>${e[2]}</span></div><div class="role"><b>Objectif final</b><span>${e[1]}</span></div></div><h3>Déroulement détaillé</h3><div class="step-list">${steps.map((s,i)=>`<article class="step-card"><div class="step-copy"><span class="step-number">ÉTAPE ${i+1} / ${steps.length}</span><p>${s.replace(/[.]$/,'')}.</p><small>Reste sur cette tâche jusqu’à ce que l’escouade confirme qu’elle est terminée, puis passe à la suivante.</small></div>${svg(e,i,steps.length)}</article>`).join('')}</div><p class="callout"><strong>Repère d’escouade :</strong> ${e[4]}</p>`;
-    document.getElementById('mapCard').innerHTML=`<h2>Lire les schémas</h2><p class="map-note">Chaque étape possède son propre schéma : le nœud et le trajet en or signalent le repère à suivre. Ces vues sont des illustrations tactiques simplifiées, pas les cartes exactes du jeu.</p><div class="map-legend"><span><i class="map-dot"></i>Entrée / sortie</span><span><i class="map-dot" style="background:#e6bb72"></i>Relais / étape active</span><span><i class="map-dot" style="background:#c7a2ff"></i>Mécanique</span><span><i class="map-dot" style="background:#e18378"></i>Boss</span></div>`;
+    const steps=e[3].split(/[.;]\s+/).filter(Boolean);
+    document.getElementById('encounterCard').innerHTML=`<h2>${e[0]}</h2><p class="encounter-lead">${e[1]}</p><div class="roles"><div class="role"><b>Répartition suggérée</b><span>${e[2]}</span></div><div class="role"><b>Objectif final</b><span>${e[1]}</span></div></div><h3>Déroulement pas à pas</h3><p class="map-note">Lis les consignes dans l’ordre. Les termes de raid sont expliqués sous chaque action ; les noms des ennemis et des objets peuvent varier selon la langue du jeu.</p><div class="step-list">${steps.map((s,i)=>`<article class="step-card"><div class="step-copy"><span class="step-number">ÉTAPE ${i+1} / ${steps.length} — ACTION À FAIRE</span><p>${s.replace(/[.]$/,'')}.</p><div class="beginner-help"><b>En pratique</b><p>${noviceExplanation(s)}</p></div><small>Ne passe à la suite qu’après la confirmation de ton escouade.</small></div>${svg(e,i,steps.length)}</article>`).join('')}</div><p class="callout"><strong>Repère d’escouade :</strong> ${e[4]}</p>`;
+    document.getElementById('mapCard').innerHTML=`<h2>Carte réelle de la rencontre</h2><p class="map-note">Destiny 2 ne fournit pas de mini-carte tactique de ces salles. Des joueurs ont dessiné des plans d’arène et des callouts. Ouvre la collection correspondant à ce raid, puis choisis la rencontre (${e[0]}). Ces cartes sont hébergées par leurs créateurs.</p><a class="real-map-link" href="${mapSources[r.n]}" target="_blank" rel="noopener noreferrer">Ouvrir les cartes communautaires de ${r.n} ↗</a><p class="map-note">Le schéma simplifié ci-dessous aide à suivre l’ordre de cette étape ; il ne représente pas la salle réelle.</p>${svg(e,ei,steps.length)}<div class="map-legend"><span><i class="map-dot"></i>Départ / sortie</span><span><i class="map-dot" style="background:#e6bb72"></i>Repère de l’étape</span><span><i class="map-dot" style="background:#c7a2ff"></i>Mécanique</span><span><i class="map-dot" style="background:#e18378"></i>Boss</span></div>`;
     document.getElementById('raidLinks').innerHTML=`Guide complémentaire : <a href="https://destiny2.vaexil.tv/guides/raids/${r.u}" target="_blank" rel="noopener noreferrer">${r.n} (Vaexil)</a> · <a href="https://help.bungie.net/hc/en-us/articles/49848696022548-Destiny-2-Monument-of-Triumph-and-Update-9-7-0-Support-Guide" target="_blank" rel="noopener noreferrer">Disponibilité des raids (Bungie)</a>`;
     nav.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ei=Number(b.dataset.i);render()}));
   }
