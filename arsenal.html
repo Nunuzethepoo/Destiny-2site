@@ -84,6 +84,8 @@
     let socketsParObjet = {};
     let perksParObjet = {};
     let definitionsObjets = {};
+    let cheminsManifestActifs = {};
+    let definitionsPerksFr = null;
     let perksArmesCharges = false;
     const cacheDefinitions = new Map();
 
@@ -369,7 +371,7 @@
         });
       }
       let cache = {};
-      try { cache = JSON.parse(localStorage.getItem("vigiePerkDefsCache-fr") || "{}"); } catch (_) {}
+      try { cache = JSON.parse(localStorage.getItem("vigiePerkDefsCache-fr-v2") || "{}"); } catch (_) {}
       for (const hash of hashsPerks) {
         if (!cacheDefinitions.has("perk:" + hash) && cache["perk:" + hash]) cacheDefinitions.set("perk:" + hash, cache["perk:" + hash]);
       }
@@ -399,20 +401,23 @@
       await Promise.all(Array.from({ length: Math.min(4, manquants.length) }, worker));
       let prochainPerk = 0;
       const perksManquants = Array.from(hashsPerks).filter(function (hash) { return !cacheDefinitions.has("perk:" + hash); });
-      async function workerPerks() {
-        while (prochainPerk < perksManquants.length) {
-          const hash = perksManquants[prochainPerk++];
-          try {
-            const definition = await appelerBungie("/Destiny2/Manifest/DestinySandboxPerkDefinition/" + hash + "/?lc=fr");
-            const compacte = { displayProperties: { name: definition.displayProperties && definition.displayProperties.name, icon: definition.displayProperties && definition.displayProperties.icon, description: definition.displayProperties && definition.displayProperties.description } };
-            cacheDefinitions.set("perk:" + hash, compacte);
-            cache["perk:" + hash] = compacte;
-          } catch (_) { cacheDefinitions.set("perk:" + hash, null); }
-          await new Promise(function (resolve) { setTimeout(resolve, 80); });
+      if (perksManquants.length) {
+        try {
+          if (!definitionsPerksFr) definitionsPerksFr = await chargerDefinitionsStatiques(cheminsManifestActifs.DestinySandboxPerkDefinition);
+        } catch (_) { definitionsPerksFr = {}; }
+        for (const hash of perksManquants) {
+          let definition = definitionsPerksFr[hash];
+          if (!definition) {
+            try { definition = await appelerBungie("/Destiny2/Manifest/DestinySandboxPerkDefinition/" + hash + "/?lc=fr"); }
+            catch (_) { definition = null; }
+          }
+          const compacte = definition ? { displayProperties: { name: definition.displayProperties && definition.displayProperties.name, icon: definition.displayProperties && definition.displayProperties.icon, description: definition.displayProperties && definition.displayProperties.description } } : null;
+          cacheDefinitions.set("perk:" + hash, compacte);
+          if (compacte) cache["perk:" + hash] = compacte;
         }
+        definitionsPerksFr = null;
       }
-      await Promise.all(Array.from({ length: Math.min(4, perksManquants.length) }, workerPerks));
-      try { localStorage.setItem("vigiePerkDefsCache-fr", JSON.stringify(cache)); } catch (_) {}
+      try { localStorage.setItem("vigiePerkDefsCache-fr-v2", JSON.stringify(cache)); } catch (_) {}
       for (const hash of hashs) {
         if (!cacheDefinitions.has(hash) && cache[hash]) cacheDefinitions.set(Number(hash), cache[hash]);
       }
@@ -489,10 +494,10 @@
         compteActif = compte;
         const profil = await appelerBungie("/Destiny2/" + compte.membershipType + "/Profile/" + compte.membershipId + "/?components=102,200,201,205");
         const manifest = await appelerBungie("/Destiny2/Manifest/");
-        const cheminsManifest = manifest.jsonWorldComponentContentPaths.fr;
+        cheminsManifestActifs = manifest.jsonWorldComponentContentPaths.fr;
         const definitions = await chargerDefinitionsStatiques(
-          cheminsManifest.DestinyInventoryItemLiteDefinition || cheminsManifest.DestinyInventoryItemDefinition,
-          cheminsManifest.DestinyInventoryItemDefinition
+          cheminsManifestActifs.DestinyInventoryItemLiteDefinition || cheminsManifestActifs.DestinyInventoryItemDefinition,
+          cheminsManifestActifs.DestinyInventoryItemDefinition
         );
         definitionsObjets = definitions;
         const persos = profil.characters && profil.characters.data || {};
