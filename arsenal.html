@@ -315,8 +315,9 @@
         const hash = Number(reference.perkHash);
         const definition = cacheDefinitions.get("perk:" + hash);
         const props = definition && definition.displayProperties || {};
-        return { nom: props.name || "Perk " + hash, icone: reference.iconPath || props.icon || "", description: props.description || "", actif: reference.isActive !== false, hash: hash };
-      });
+        if (!props.name) return null;
+        return { nom: props.name, icone: reference.iconPath || props.icon || "", description: props.description || "", actif: reference.isActive !== false, hash: hash };
+      }).filter(Boolean);
       const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
       const vus = new Set();
       resultat.forEach(function (perk) { vus.add(String(perk.hash || perk.nom).toLocaleLowerCase("fr")); });
@@ -373,7 +374,8 @@
       let cache = {};
       try { cache = JSON.parse(localStorage.getItem("vigiePerkDefsCache-fr-v2") || "{}"); } catch (_) {}
       for (const hash of hashsPerks) {
-        if (!cacheDefinitions.has("perk:" + hash) && cache["perk:" + hash]) cacheDefinitions.set("perk:" + hash, cache["perk:" + hash]);
+        const definition = cache["perk:" + hash];
+        if (!cacheDefinitions.has("perk:" + hash) && definition && definition.displayProperties && definition.displayProperties.name) cacheDefinitions.set("perk:" + hash, definition);
       }
       const manquants = Array.from(hashs).filter(function (hash) {
         return !cacheDefinitions.has(hash) && !cache[hash];
@@ -411,8 +413,10 @@
             catch (_) {}
           }
           const compacte = definition ? { displayProperties: { name: definition.displayProperties && definition.displayProperties.name, icon: definition.displayProperties && definition.displayProperties.icon, description: definition.displayProperties && definition.displayProperties.description } } : null;
-          cacheDefinitions.set("perk:" + hash, compacte);
-          if (compacte && compacte.displayProperties.name) cache["perk:" + hash] = compacte;
+          if (compacte && compacte.displayProperties.name) {
+            cacheDefinitions.set("perk:" + hash, compacte);
+            cache["perk:" + hash] = compacte;
+          }
           await new Promise(function (resolve) { setTimeout(resolve, 80); });
         }
       }
