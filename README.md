@@ -33,6 +33,7 @@ Un client Bungie public ne reçoit pas de jeton de renouvellement. Si sa session
 - `vigie.css` et `vigie-shell.js` — thème commun et navigation des pages.
 - `generateur.html` — recherche de builds par priorités de stats, exotique et bonus d’armure à 2 ou 4 pièces.
 - `collection.html` et `collection.js` — catalogue des armes Bungie et recherche des rolls PvE recommandés par la liste communautaire Aegis.
-- `raids.html` et `raids.js` — guides en français des dix raids, étapes par rencontre, répartition suggérée et schémas tactiques indicatifs.
+- `raids.html` et `raids.js` — guides en français des raids, rôles, glossaire débutant, actions et erreurs à éviter, avec cartes communautaires ou captures réelles des salles créditées par rencontre.
 - `profil.html`, `armures.html`, `equiper.html`, `mods.html` — gestion de compte et d’équipement.
 - `manifest.html`, `diagnostic*.html`, `bungie.html` — pages de diagnostic.
+
