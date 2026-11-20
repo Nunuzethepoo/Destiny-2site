@@ -3,6 +3,9 @@
     ["generateur.html", "Builds"],
     ["collection.html", "Collection"],
     ["raids.html", "Raids"],
+    ["rapports.html#raid", "Raid Report"],
+    ["rapports.html#donjon", "Donjon Report"],
+    ["clan.html", "Clan"],
     ["arsenal.html", "Arsenal"],
     ["equiper.html", "Équiper"]
   ];
@@ -23,7 +26,9 @@
     const link = document.createElement("a");
     link.href = href;
     link.textContent = label;
-    if (href === current) link.setAttribute("aria-current", "page");
+    const linkHash = href.includes("#") ? href.slice(href.indexOf("#")) : "";
+    const activeHash = linkHash ? (linkHash === location.hash || (!location.hash && linkHash === "#raid")) : true;
+    if (href.split("#")[0] === current && activeHash) link.setAttribute("aria-current", "page");
     nav.appendChild(link);
   });
   header.appendChild(nav);
@@ -36,3 +41,4 @@
   });
   document.body.replaceChildren(header, main, ...scripts);
 })();
+

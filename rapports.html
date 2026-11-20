@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0a0d12">
+  <title>Raid Report & Donjon Report — VIGIE</title>
+  <link rel="stylesheet" href="vigie.css">
+  <script src="vigie-shell.js" defer></script>
+</head>
+<body>
+  <h1>Rapports d’activité</h1>
+  <p>Retrouve tes raids et donjons récents, puis ouvre le rapport de fin de partie avec les statistiques de chaque Gardien.</p>
+  <div class="report-tabs" role="tablist" aria-label="Type de rapport">
+    <a href="#raid" id="raidTab" role="tab">Raid Report</a>
+    <a href="#donjon" id="dungeonTab" role="tab">Donjon Report</a>
+  </div>
+  <div id="reportStatus" class="report-status" role="status" aria-live="polite">Connexion à Bungie requise.</div>
+  <section id="reportResults" aria-live="polite"></section>
+  <p class="report-footnote">Les activités suivent les réglages de visibilité de ton profil Bungie. Le rapport complet est fourni par l’API Bungie lorsqu’il est disponible.</p>
+  <script src="bungie-api.js"></script>
+  <script src="activity-reports.js"></script>
+  <script>
+    (() => {
+      const status = document.getElementById("reportStatus");
+      const results = document.getElementById("reportResults");
+      let account;
+      let busy = false;
+      const modeFromHash = () => location.hash === "#donjon" ? "dungeon" : "raid";
+      async function render() {
+        const mode = modeFromHash();
+        document.getElementById("raidTab").setAttribute("aria-selected", String(mode === "raid"));
+        document.getElementById("dungeonTab").setAttribute("aria-selected", String(mode === "dungeon"));
+        if (busy) return;
+        if (!sessionStorage.getItem("jeton")) {
+          status.textContent = "Connecte-toi à Bungie pour afficher tes rapports.";
+          results.innerHTML = '<p class="report-empty"><a href="oauth.html">Connecter mon compte Bungie ↗</a></p>';
+          return;
+        }
+        busy = true;
+        results.innerHTML = "";
+        status.textContent = "Chargement du profil et de l’historique Bungie…";
+        try {
+          if (!account) account = await VIGIE_ACTIVITY_REPORTS.getPrimaryAccount();
+          await VIGIE_ACTIVITY_REPORTS.renderReports(results, { ...account, mode });
+          status.textContent = mode === "raid" ? "Historique des raids chargé." : "Historique des donjons chargé.";
+        } catch (error) {
+          status.textContent = error.message || "Impossible de charger les rapports Bungie.";
+        } finally {
+          busy = false;
+          if (modeFromHash() !== mode) render();
+        }
+      }
+      addEventListener("hashchange", render);
+      render();
+    })();
+  </script>
+</body>
+</html>
+

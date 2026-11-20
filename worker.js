@@ -28,7 +28,9 @@ function allowedPath(path, method) {
   if (method === "GET") {
     return path.startsWith("/Platform/Destiny2/") ||
       path.startsWith("/Platform/User/GetMembershipsForCurrentUser/") ||
-      path.startsWith("/Platform/User/GetMembershipsById/");
+      path.startsWith("/Platform/User/GetMembershipsById/") ||
+      /^\/Platform\/GroupV2\/User\/\d+\/\d+\/\d+\/\d+\/$/.test(path.split("?")[0]) ||
+      /^\/Platform\/GroupV2\/\d+\/Members\/$/.test(path.split("?")[0]);
   }
   return method === "POST" && /^\/Platform\/Destiny2\/Actions\/Items\/(TransferItem|EquipItem|EquipItems|InsertSocketPlugFree)\/$/.test(path);
 }
@@ -96,3 +98,4 @@ export default {
     }
   }
 };
+

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0a0d12">
+  <title>Clan — VIGIE</title>
+  <link rel="stylesheet" href="vigie.css">
+  <script src="vigie-shell.js" defer></script>
+</head>
+<body>
+  <h1>Mon clan</h1>
+  <p>Parcours les membres de ton clan Bungie. Sélectionne un Gardien pour consulter ses rapports de raid et de donjon accessibles.</p>
+  <p class="report-footnote">Pour lire le clan, le client Bungie doit autoriser la lecture des forums, murs et membres de clan. Après avoir activé cette permission dans le portail développeur, déconnecte puis reconnecte ton compte sur VIGIE.</p>
+  <div class="clan-toolbar">
+    <label for="clanSelect">Clan</label><select id="clanSelect" disabled><option>Chargement…</option></select>
+    <label for="memberSearch">Rechercher un membre</label><input id="memberSearch" type="search" placeholder="Nom Bungie" disabled>
+    <button id="loadClan" type="button">Actualiser</button>
+  </div>
+  <div id="clanStatus" class="report-status" role="status" aria-live="polite">Connexion à Bungie requise.</div>
+  <div class="clan-layout">
+    <section id="clanMembers" class="clan-members" aria-label="Membres du clan"></section>
+    <section id="memberReports" class="clan-report-panel" aria-label="Rapports du membre sélectionné">
+      <div class="report-empty">Sélectionne un membre pour afficher ses rapports.</div>
+    </section>
+  </div>
+  <script src="bungie-api.js"></script>
+  <script src="activity-reports.js"></script>
+  <script src="clan.js"></script>
+</body>
+</html>
+
