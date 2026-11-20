@@ -1,6 +1,7 @@
 (() => {
   const links = [
     ["generateur.html", "Builds"],
+    ["collection.html", "Collection"],
     ["arsenal.html", "Arsenal"],
     ["equiper.html", "Équiper"]
   ];
