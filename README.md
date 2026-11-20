@@ -12,8 +12,8 @@ GitHub Pages n’exécute pas de code serveur. `worker.js` est le relais Cloudfl
 
 1. Déploie `worker.js` dans **Cloudflare → Workers & Pages → Create Worker → Edit code → Deploy**.
 2. Dans les paramètres du Worker, configure la variable `SITE_ORIGIN` avec l’origine du site, sans chemin. Pour le domaine GitHub Pages par défaut : `https://nunuzethepoo.github.io`. Si tu utilises un domaine personnalisé, entre son origine à la place.
-3. Dans **Settings → Variables and Secrets**, ajoute `BUNGIE_CLIENT_ID` avec la valeur `56958` et `BUNGIE_API_KEY` comme **Secret** avec ta clé API actuellement valide.
-4. Dans le portail développeur Bungie, configure le client `56958` en client public, avec l’URL de retour exacte : `https://nunuzethepoo.github.io/Destiny-2site/oauth.html`. Active `ReadDestinyInventoryAndVault` et `MoveEquipDestinyItems`. N’ajoute pas de paramètre OAuth `scope` à l’URL.
+3. Dans **Settings → Variables and Secrets**, ajoute `BUNGIE_CLIENT_ID` avec la valeur `56947` et `BUNGIE_API_KEY` comme **Secret** avec ta clé API actuellement valide.
+4. Dans le portail développeur Bungie, configure le client `56947` en client public, avec l’URL de retour exacte : `https://nunuzethepoo.github.io/Destiny-2site/oauth.html`. Active `ReadDestinyInventoryAndVault` et `MoveEquipDestinyItems`. N’ajoute pas de paramètre OAuth `scope` à l’URL.
 5. Remplace/publie les fichiers modifiés du site dans le dépôt GitHub. Ouvre la page `oauth.html`, colle l’URL `https://NOM-DU-WORKER.NOM-DE-COMPTE.workers.dev`, puis clique **Connecter mon compte**.
 
 Un client Bungie public ne reçoit pas de jeton de renouvellement. Si sa session expire, reconnecte-toi depuis `oauth.html`. Le jeton n’est stocké que dans `sessionStorage` pour l’onglet en cours.
