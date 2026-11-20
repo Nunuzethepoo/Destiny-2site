@@ -30,5 +30,6 @@ Un client Bungie public ne reçoit pas de jeton de renouvellement. Si sa session
 - `oauth.html` — connexion OAuth Bungie et configuration de l’URL du Worker.
 - `bungie-api.js` — client navigateur, sans clé API.
 - `worker.js` — relais Cloudflare.
+- `vigie.css` et `vigie-shell.js` — thème commun et navigation des pages.
 - `profil.html`, `armures.html`, `generateur.html`, `equiper.html`, `mods.html` — gestion de compte et d’équipement.
 - `manifest.html`, `diagnostic*.html`, `bungie.html` — pages de diagnostic.
