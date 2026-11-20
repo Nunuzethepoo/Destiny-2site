@@ -129,6 +129,8 @@
     let definitionMods = {};
     let characterPlugSets = {};
     let profilePlugSets = {};
+    let compteActif = null;
+    let composantsModsCharges = false;
 
     // ---------- Parler à Bungie et charger les données ----------
 
@@ -163,7 +165,9 @@
 
       const stats = cache.stats || await lireFichier(chemins.DestinyStatDefinition);
       const objets = Object.assign({}, cache.objets);
-      const hashesArmureManquants = hashesArmure.filter(function (hash) { return !objets[hash] || !objets[hash].sockets; });
+      // Les définitions sont mises en cache en version compacte. Une ancienne entrée
+      // sans marqueur est rechargée une fois pour récupérer les prises utiles aux mods.
+      const hashesArmureManquants = hashesArmure.filter(function (hash) { return !objets[hash] || !objets[hash]._vigieSocketsCached; });
       let prochain = 0;
       let charges = 0;
       const nombreWorkers = Math.min(4, hashesArmureManquants.length);
@@ -233,7 +237,15 @@
           equippingBlock: {
             equipableItemSetHash: definition.equippingBlock && definition.equippingBlock.equipableItemSetHash
           },
-          sockets: definition.sockets
+          sockets: {
+            socketEntries: (definition.sockets && definition.sockets.socketEntries || []).map(function (entree) {
+              return {
+                reusablePlugSetHash: entree.reusablePlugSetHash || 0,
+                reusablePlugItems: (entree.reusablePlugItems || []).map(function (plug) { return { plugItemHash: plug.plugItemHash }; })
+              };
+            })
+          },
+          _vigieSocketsCached: true
         };
       });
       hashesSets.forEach(function (hash) { if (sets[hash]) setsEnCache[hash] = sets[hash]; });
@@ -492,7 +504,12 @@
         let groupe = groupes.get(choix.setHash);
         if (!groupe) {
           groupe = document.createElement("optgroup");
-          groupe.label = choix.setName;
+          const piecesDuSet = toutesLesArmures.filter(function (armure) {
+            return armure.classe === classe && Number(armure.setHash) === choix.setHash &&
+              (document.getElementById("inclureCoffre").checked || armure.lieu !== "Coffre");
+          });
+          const dansLeCoffre = piecesDuSet.filter(function (armure) { return armure.lieu === "Coffre"; }).length;
+          groupe.label = choix.setName + " · " + piecesDuSet.length + " pièce(s), dont " + dansLeCoffre + " au coffre";
           groupes.set(choix.setHash, groupe);
           choixBonus.appendChild(groupe);
         }
@@ -574,6 +591,26 @@
       if (toutZero) {
         message.textContent = "Mets une importance supérieure à 0 sur au moins une stat.";
         return;
+      }
+
+      // Les composants des sockets sont volumineux : les charger au clic permet
+      // d'afficher rapidement les exotiques et les bonus disponibles.
+      if (!composantsModsCharges) {
+        message.textContent = "Chargement des sockets et des mods de ton inventaire…";
+        const profilMods = await appelerBungie(
+          "/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=300,305"
+        );
+        profilePlugSets = (profilMods.profilePlugSets && profilMods.profilePlugSets.data && profilMods.profilePlugSets.data.plugs) || {};
+        characterPlugSets = {};
+        const plugDataPersos = profilMods.characterPlugSets && profilMods.characterPlugSets.data || {};
+        for (const idPerso in plugDataPersos) characterPlugSets[idPerso] = plugDataPersos[idPerso].plugs || {};
+        socketParInstance = (profilMods.itemComponents && profilMods.itemComponents.sockets && profilMods.itemComponents.sockets.data) || {};
+        const instances = (profilMods.itemComponents && profilMods.itemComponents.instances && profilMods.itemComponents.instances.data) || {};
+        for (const piece of toutesLesArmures) {
+          const energie = instances[piece.idInstance] && instances[piece.idInstance].energy;
+          piece.capaciteEnergie = Number(energie && energie.energyCapacity) || 10;
+        }
+        composantsModsCharges = true;
       }
 
       const hashesMods = [];
@@ -818,7 +855,11 @@
       }
     }
 
-    document.getElementById("chercher").addEventListener("click", chercher);
+    document.getElementById("chercher").addEventListener("click", function () {
+      chercher().catch(function (erreur) {
+        message.textContent = "Le calcul a échoué : " + (erreur.message || "erreur Bungie");
+      });
+    });
 
     // ---------- Chargement de l'inventaire ----------
 
@@ -841,25 +882,23 @@
           memberships.destinyMemberships.find(function (m) {
             return m.membershipId === memberships.primaryMembershipId;
           }) || memberships.destinyMemberships[0];
+        compteActif = compte;
 
         statut.textContent = "Chargement de ton inventaire...";
-      const profil = await appelerBungie(
+        const profil = await appelerBungie(
           "/Destiny2/" + compte.membershipType + "/Profile/" + compte.membershipId +
-          "/?components=102,201,205,300,305"
+          "/?components=102,201,205"
         );
-        profilePlugSets = (profil.profilePlugSets && profil.profilePlugSets.data && profil.profilePlugSets.data.plugs) || {};
-        characterPlugSets = {};
-        const plugDataPersos = profil.characterPlugSets && profil.characterPlugSets.data || {};
-        for (const idPerso in plugDataPersos) characterPlugSets[idPerso] = plugDataPersos[idPerso].plugs || {};
 
         const statsObjets =
           (profil.itemComponents && profil.itemComponents.stats && profil.itemComponents.stats.data) || {};
-        socketParInstance = (profil.itemComponents && profil.itemComponents.sockets && profil.itemComponents.sockets.data) || {};
 
         const objets = [];
         function ajouter(liste, lieu) {
           for (const objet of liste) {
-            if (objet.bucketHash && !EMPLACEMENTS_ARMURE[objet.bucketHash]) continue;
+            // Ne charger que les cinq emplacements d'armure : le coffre contient
+            // aussi beaucoup d'objets sans rapport qui ralentissaient l'initialisation.
+            if (!EMPLACEMENTS_ARMURE[objet.bucketHash]) continue;
             objets.push({ objet: objet, lieu: lieu });
           }
         }
@@ -915,7 +954,7 @@
             stats: stats,
             total: totalDesStats(stats)
             ,definition: definition,
-            capaciteEnergie: Number(profil.itemComponents && profil.itemComponents.instances && profil.itemComponents.instances.data && profil.itemComponents.instances.data[element.objet.itemInstanceId] && profil.itemComponents.instances.data[element.objet.itemInstanceId].energy && profil.itemComponents.instances.data[element.objet.itemInstanceId].energy.energyCapacity) || 10
+            capaciteEnergie: 10
           });
         }
 
@@ -923,7 +962,8 @@
         majExotiques();
         majBonus();
         formulaire.style.display = "grid";
-        statut.textContent = toutesLesArmures.length + " armures prêtes. Ajuste les priorités, le bonus ou l’exotique puis lance la recherche.";
+        const armuresCoffre = toutesLesArmures.filter(function (a) { return a.lieu === "Coffre"; }).length;
+        statut.textContent = toutesLesArmures.length + " armures prêtes, dont " + armuresCoffre + " dans le coffre. Ajuste les priorités, le bonus ou l’exotique puis lance la recherche.";
       } catch (erreur) {
         statut.textContent = "Erreur : " + erreur.message;
       }
