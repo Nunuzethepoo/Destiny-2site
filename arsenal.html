@@ -44,6 +44,7 @@
   <h1>Arsenal du Gardien</h1>
   <p class="arsenal-intro">Tes personnages, leurs équipements, tes armures et tes armes du coffre sont réunis ici. Utilise les filtres pour retrouver une pièce rapidement.</p>
   <p id="statut" role="status" aria-live="polite">Chargement de ton arsenal…</p>
+  <p id="reconnexion" hidden><a href="oauth.html">Reconnecter mon compte Bungie</a></p>
   <section id="personnages" class="guardians" aria-label="Mes personnages"></section>
   <section class="filters" aria-label="Filtres et tri d’inventaire">
     <label>Personnage<select id="filtrePersonnage"><option value="">Tous</option></select></label>
@@ -85,6 +86,7 @@
     const cacheDefinitions = new Map();
 
     async function lireJSON(reponse, source) {
+      if (reponse.status === 401) throw new Error("SESSION_BUNGIE_EXPIREE");
       const texte = await reponse.text();
       try { return JSON.parse(texte); }
       catch (_) {
@@ -364,7 +366,8 @@
       try {
         let memberships;
         try { memberships = await appelerBungie("/User/GetMembershipsForCurrentUser/"); }
-        catch (_) {
+        catch (erreurMembership) {
+          if (erreurMembership && erreurMembership.message === "SESSION_BUNGIE_EXPIREE") throw erreurMembership;
           const membershipId = sessionStorage.getItem("membershipId");
           if (!membershipId) throw new Error("La session Bungie est expirée. Reconnecte-toi depuis la page Connexion.");
           memberships = await appelerBungie("/User/GetMembershipsById/" + membershipId + "/254/");
@@ -444,7 +447,12 @@
         afficher();
         indexerPerksArmes();
       } catch (erreur) {
-        statut.textContent = "Erreur de chargement : " + erreur.message;
+        if (erreur.message === "SESSION_BUNGIE_EXPIREE") {
+          statut.textContent = "Ta session Bungie a expiré ou a été révoquée. Reconnecte-toi pour recharger ton arsenal.";
+          document.getElementById("reconnexion").hidden = false;
+        } else {
+          statut.textContent = "Erreur de chargement : " + erreur.message;
+        }
       }
     }
     charger();
