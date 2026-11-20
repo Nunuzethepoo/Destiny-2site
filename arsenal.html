@@ -369,7 +369,7 @@
         });
       }
       let cache = {};
-      try { cache = JSON.parse(localStorage.getItem("vigiePerkDefsCache") || "{}"); } catch (_) {}
+      try { cache = JSON.parse(localStorage.getItem("vigiePerkDefsCache-fr") || "{}"); } catch (_) {}
       for (const hash of hashsPerks) {
         if (!cacheDefinitions.has("perk:" + hash) && cache["perk:" + hash]) cacheDefinitions.set("perk:" + hash, cache["perk:" + hash]);
       }
@@ -381,7 +381,7 @@
         while (prochain < manquants.length) {
           const hash = manquants[prochain++];
           try {
-            const definition = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/");
+            const definition = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/?lc=fr");
             const compacte = {
               displayProperties: {
                 name: definition.displayProperties && definition.displayProperties.name,
@@ -403,7 +403,7 @@
         while (prochainPerk < perksManquants.length) {
           const hash = perksManquants[prochainPerk++];
           try {
-            const definition = await appelerBungie("/Destiny2/Manifest/DestinySandboxPerkDefinition/" + hash + "/");
+            const definition = await appelerBungie("/Destiny2/Manifest/DestinySandboxPerkDefinition/" + hash + "/?lc=fr");
             const compacte = { displayProperties: { name: definition.displayProperties && definition.displayProperties.name, icon: definition.displayProperties && definition.displayProperties.icon, description: definition.displayProperties && definition.displayProperties.description } };
             cacheDefinitions.set("perk:" + hash, compacte);
             cache["perk:" + hash] = compacte;
@@ -412,7 +412,7 @@
         }
       }
       await Promise.all(Array.from({ length: Math.min(4, perksManquants.length) }, workerPerks));
-      try { localStorage.setItem("vigiePerkDefsCache", JSON.stringify(cache)); } catch (_) {}
+      try { localStorage.setItem("vigiePerkDefsCache-fr", JSON.stringify(cache)); } catch (_) {}
       for (const hash of hashs) {
         if (!cacheDefinitions.has(hash) && cache[hash]) cacheDefinitions.set(Number(hash), cache[hash]);
       }
@@ -456,7 +456,7 @@
       for (const hash of hashs) {
         let definition = definitionsObjets[hash] || cacheDefinitions.get(hash);
         if (!definition) {
-          definition = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/");
+          definition = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/?lc=fr");
           cacheDefinitions.set(hash, definition);
         }
         const props = definition.displayProperties || {};
