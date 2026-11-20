@@ -30,6 +30,11 @@
     .item-actions select{max-width:145px;min-height:30px;padding:5px 7px;border:1px solid #344353;border-radius:3px;background:#0c1219;color:#f1f4f7;font-size:10px}
     .perk-list{margin:9px 0 0;padding:8px 9px;border-left:2px solid var(--gold);background:#0a1016;color:#b9c4ce;font-size:10px;line-height:1.55}
     .perk-list strong{color:#e4c282}
+    .perk-icons{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+    .perk-icon{width:32px;height:32px;padding:1px!important;border:1px solid #3d4b59!important;border-radius:2px!important;background:#0a1016!important;cursor:pointer}
+    .perk-icon:hover{border-color:var(--gold)!important}
+    .perk-icon img{display:block;width:28px;height:28px;object-fit:cover;border:0;border-radius:1px}
+    .perk-icon.no-icon{width:auto;min-width:32px;padding:2px 5px!important;color:var(--gold)!important;font-size:9px!important}
     .empty{grid-column:1/-1;padding:22px;border:1px dashed #344251;color:var(--muted);text-align:center;font-size:12px}
     @media(max-width:760px){.filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:430px){.filters{grid-template-columns:1fr}.inventory-heading{align-items:flex-start;flex-direction:column}}
@@ -46,7 +51,8 @@
     <label>Emplacement<select id="filtreLieu"><option value="">Tous les lieux</option><option value="Coffre">Coffre</option><option value="Inventaire">Inventaire du personnage</option><option value="Équipée">Équipement porté</option></select></label>
     <label>Trier par<select id="tri"><option value="nom">Nom A → Z</option><option value="nom-reverse">Nom Z → A</option><option value="emplacement">Emplacement</option><option value="rarete">Exotiques d’abord</option><option value="categorie">Armes puis armures</option><option value="lieu">Lieu de stockage</option></select></label>
     <label>Envoyer vers<select id="cibleTransfert"><option value="coffre">Coffre</option></select></label>
-    <label>Recherche<input id="recherche" type="search" placeholder="Nom d’une pièce…"></label>
+    <label>Recherche équipement<input id="recherche" type="search" placeholder="Nom d’une pièce…"></label>
+    <label>Recherche perk<input id="recherchePerk" type="search" placeholder="Ex. Coup rapide…"></label>
   </section>
   <div class="inventory-heading"><h2>Équipement disponible</h2><span id="compteur"></span></div>
   <section id="objets" aria-live="polite"></section>
@@ -64,6 +70,7 @@
     const tri = document.getElementById("tri");
     const cibleTransfert = document.getElementById("cibleTransfert");
     const recherche = document.getElementById("recherche");
+    const recherchePerk = document.getElementById("recherchePerk");
     const CLASSES = { 0: "Titan", 1: "Chasseur", 2: "Arcaniste" };
     const SLOTS_ARMURE = { 3448274439:"Casque", 3551918588:"Gants", 14239492:"Torse", 20886954:"Jambes", 1585787867:"Objet de classe" };
     const SLOTS_ARME = { 1498876634:"Arme cinétique", 2465295065:"Arme énergétique", 953998645:"Arme lourde" };
@@ -71,7 +78,10 @@
     const nomsPersonnages = {};
     let compteActif = null;
     let socketsCharges = false;
+    let chargementSockets = null;
     let socketsParObjet = {};
+    let definitionsObjets = {};
+    let perksArmesCharges = false;
     const cacheDefinitions = new Map();
 
     async function appelerBungie(chemin) {
@@ -86,10 +96,14 @@
       const lieu = filtreLieu.value;
       const perso = filtrePersonnage.value;
       const terme = recherche.value.trim().toLocaleLowerCase("fr");
+      const termePerk = recherchePerk.value.trim().toLocaleLowerCase("fr");
       const visibles = tousLesObjets.filter(function (objet) {
         return (!type || objet.type === type) && (!lieu || objet.lieu === lieu) &&
           (!perso || objet.characterId === perso || objet.lieu === "Coffre") &&
-          (!terme || objet.nom.toLocaleLowerCase("fr").includes(terme));
+          (!terme || objet.nom.toLocaleLowerCase("fr").includes(terme)) &&
+          (!termePerk || (objet.type === "arme" && (objet.perks || []).some(function (perk) {
+            return perk.nom.toLocaleLowerCase("fr").includes(termePerk) || (perk.description || "").toLocaleLowerCase("fr").includes(termePerk);
+          })));
       });
       const comparateurs = {
         "nom": function (a,b) { return a.nom.localeCompare(b.nom, "fr"); },
@@ -105,7 +119,9 @@
       if (!visibles.length) {
         const vide = document.createElement("p");
         vide.className = "empty";
-        vide.textContent = "Aucune arme ou armure ne correspond à ces filtres.";
+        vide.textContent = termePerk && !perksArmesCharges
+          ? "Lecture des perks Bungie en cours… les armes correspondantes apparaîtront ici."
+          : "Aucune arme ou armure ne correspond à ces filtres.";
         zoneObjets.appendChild(vide);
         return;
       }
@@ -125,8 +141,41 @@
         meta.className = "item-meta";
         const gardien = objet.characterId ? " · " + (nomsPersonnages[objet.characterId] || "Personnage") : "";
         meta.textContent = objet.slot + " · " + objet.lieu + gardien;
+        let iconesPerks = null;
         const actions = document.createElement("div");
         actions.className = "item-actions";
+        if (objet.type === "arme") {
+          iconesPerks = document.createElement("div");
+          iconesPerks.className = "perk-icons";
+          if (objet.perks && objet.perks.length) {
+            objet.perks.forEach(function (perk) {
+              const icone = document.createElement("button");
+              icone.type = "button";
+              icone.className = "perk-icon" + (perk.icone ? "" : " no-icon");
+              icone.title = perk.nom;
+              icone.setAttribute("aria-label", "Filtrer par perk : " + perk.nom);
+              if (perk.icone) {
+                const imagePerk = document.createElement("img");
+                imagePerk.loading = "lazy";
+                imagePerk.src = "https://www.bungie.net" + perk.icone;
+                imagePerk.alt = perk.nom;
+                icone.appendChild(imagePerk);
+              } else {
+                icone.textContent = perk.nom.slice(0, 3).toUpperCase();
+              }
+              icone.addEventListener("click", function () {
+                recherchePerk.value = perk.nom;
+                afficher();
+                recherchePerk.focus();
+              });
+              iconesPerks.appendChild(icone);
+            });
+          } else {
+            iconesPerks.textContent = perksArmesCharges ? "Aucun perk actif reconnu" : "Lecture des perks…";
+            iconesPerks.style.color = "#9eabb8";
+            iconesPerks.style.fontSize = "9px";
+          }
+        }
         const perksButton = document.createElement("button");
         perksButton.type = "button";
         perksButton.textContent = "Voir les perks";
@@ -162,7 +211,9 @@
           finally { boutonTransfert.disabled = false; }
         });
         actions.appendChild(boutonTransfert);
-        info.append(nom, meta, actions, perks);
+        info.append(nom, meta);
+        if (iconesPerks) info.appendChild(iconesPerks);
+        info.append(actions, perks);
         carte.append(image, info);
         zoneObjets.appendChild(carte);
       });
@@ -170,6 +221,10 @@
 
     [filtrePersonnage, filtreType, filtreLieu, tri].forEach(function (filtre) { filtre.addEventListener("change", afficher); });
     recherche.addEventListener("input", afficher);
+    recherchePerk.addEventListener("input", function () {
+      afficher();
+      if (!perksArmesCharges && !chargementSockets) indexerPerksArmes();
+    });
 
     async function envoyerOrdreTransfert(objet, characterId, transferToVault) {
       const reponse = await VIGIE_BUNGIE.fetchApi("/Destiny2/Actions/Items/TransferItem/", {
@@ -215,18 +270,53 @@
       afficher();
     }
 
+    async function chargerSockets() {
+      if (socketsCharges) return;
+      if (!chargementSockets) {
+        chargementSockets = appelerBungie("/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=305").then(function (profil) {
+          socketsParObjet = profil.itemComponents && profil.itemComponents.sockets && profil.itemComponents.sockets.data || {};
+          socketsCharges = true;
+        }).finally(function () { chargementSockets = null; });
+      }
+      await chargementSockets;
+    }
+
+    function perksActifsPourObjet(objet) {
+      const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
+      const vus = new Set();
+      return etats.filter(function (socket) { return socket && socket.plugHash && socket.isEnabled !== false; }).map(function (socket) {
+        const definition = definitionsObjets[Number(socket.plugHash)];
+        const props = definition && definition.displayProperties || {};
+        const categorie = definition && definition.plug && definition.plug.plugCategoryIdentifier || "";
+        if (!props.name || /shader|ornament|transmat|emote/i.test(categorie)) return null;
+        if (vus.has(props.name)) return null;
+        vus.add(props.name);
+        return { nom: props.name, icone: props.icon || "", description: props.description || "" };
+      }).filter(Boolean);
+    }
+
+    async function indexerPerksArmes() {
+      try {
+        await chargerSockets();
+        tousLesObjets.filter(function (objet) { return objet.type === "arme"; }).forEach(function (objet) {
+          objet.perks = perksActifsPourObjet(objet);
+        });
+        perksArmesCharges = true;
+        afficher();
+        statut.textContent = "Arsenal chargé · perks des armes indexés : tu peux rechercher un perk ou cliquer sur son icône.";
+      } catch (erreur) {
+        statut.textContent = "Arsenal chargé, mais les perks des armes sont indisponibles : " + erreur.message;
+      }
+    }
+
     async function afficherPerks(objet, conteneur) {
       if (!objet.idInstance) throw new Error("Cet objet ne possède pas de sockets individuels.");
-      if (!socketsCharges) {
-        const profil = await appelerBungie("/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=305");
-        socketsParObjet = profil.itemComponents && profil.itemComponents.sockets && profil.itemComponents.sockets.data || {};
-        socketsCharges = true;
-      }
+      await chargerSockets();
       const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
       const hashs = Array.from(new Set(etats.filter(function (socket) { return socket && socket.plugHash && socket.isEnabled !== false; }).map(function (socket) { return Number(socket.plugHash); })));
       const details = [];
       for (const hash of hashs) {
-        let definition = cacheDefinitions.get(hash);
+        let definition = definitionsObjets[hash] || cacheDefinitions.get(hash);
         if (!definition) {
           definition = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/");
           cacheDefinitions.set(hash, definition);
@@ -260,6 +350,7 @@
         const repManifest = await VIGIE_BUNGIE.fetchPublic(chemin);
         if (!repManifest.ok) throw new Error("Impossible de charger les définitions d’objets Bungie.");
         const definitions = await repManifest.json();
+        definitionsObjets = definitions;
         const persos = profil.characters && profil.characters.data || {};
         for (const id in persos) {
           const perso = persos[id];
@@ -323,6 +414,7 @@
         const coffres = tousLesObjets.filter(function (objet) { return objet.lieu === "Coffre"; }).length;
         statut.textContent = "Connecté : " + compte.bungieGlobalDisplayName + " · " + tousLesObjets.length + " armes et armures chargées, dont " + coffres + " dans le coffre.";
         afficher();
+        indexerPerksArmes();
       } catch (erreur) {
         statut.textContent = "Erreur de chargement : " + erreur.message;
       }
