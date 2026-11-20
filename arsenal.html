@@ -12,7 +12,7 @@
     .guardian{padding:14px;border:1px solid var(--line);border-radius:4px;background:linear-gradient(145deg,#141d27,#10161e)}
     .guardian strong{display:block;color:var(--gold);font:700 20px 'Barlow Condensed';text-transform:uppercase}
     .guardian span{color:var(--muted);font-size:11px}
-    .filters{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin:18px 0;padding:15px;border:1px solid var(--line);border-radius:4px;background:#111821}
+    .filters{display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:10px;margin:18px 0;padding:15px;border:1px solid var(--line);border-radius:4px;background:#111821}
     .filters label{display:grid;gap:6px;color:#aeb9c5;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
     .filters input,.filters select{width:100%;min-width:0;min-height:39px;padding:9px 10px;border:1px solid #344353;border-radius:3px;background:#0c1219;color:#f1f4f7;font:12px 'DM Sans',sans-serif}
     .inventory-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:22px 0 10px}
@@ -25,6 +25,11 @@
     .item-name{display:block;color:#e6ebef;font-size:12px;font-weight:700;line-height:1.35;overflow-wrap:anywhere}
     .item-meta{display:block;margin-top:4px;color:#9eabb8;font-size:10px;line-height:1.45}
     .exotic{color:#d5a6ff}
+    .item-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .item-actions button{padding:6px 8px;font-size:9px}
+    .item-actions select{max-width:145px;min-height:30px;padding:5px 7px;border:1px solid #344353;border-radius:3px;background:#0c1219;color:#f1f4f7;font-size:10px}
+    .perk-list{margin:9px 0 0;padding:8px 9px;border-left:2px solid var(--gold);background:#0a1016;color:#b9c4ce;font-size:10px;line-height:1.55}
+    .perk-list strong{color:#e4c282}
     .empty{grid-column:1/-1;padding:22px;border:1px dashed #344251;color:var(--muted);text-align:center;font-size:12px}
     @media(max-width:760px){.filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:430px){.filters{grid-template-columns:1fr}.inventory-heading{align-items:flex-start;flex-direction:column}}
@@ -35,10 +40,12 @@
   <p class="arsenal-intro">Tes personnages, leurs équipements, tes armures et tes armes du coffre sont réunis ici. Utilise les filtres pour retrouver une pièce rapidement.</p>
   <p id="statut" role="status" aria-live="polite">Chargement de ton arsenal…</p>
   <section id="personnages" class="guardians" aria-label="Mes personnages"></section>
-  <section class="filters" aria-label="Filtres d’inventaire">
+  <section class="filters" aria-label="Filtres et tri d’inventaire">
     <label>Personnage<select id="filtrePersonnage"><option value="">Tous</option></select></label>
     <label>Équipement<select id="filtreType"><option value="">Armures et armes</option><option value="armure">Armures</option><option value="arme">Armes</option></select></label>
     <label>Emplacement<select id="filtreLieu"><option value="">Tous les lieux</option><option value="Coffre">Coffre</option><option value="Inventaire">Inventaire du personnage</option><option value="Équipée">Équipement porté</option></select></label>
+    <label>Trier par<select id="tri"><option value="nom">Nom A → Z</option><option value="nom-reverse">Nom Z → A</option><option value="emplacement">Emplacement</option><option value="rarete">Exotiques d’abord</option><option value="categorie">Armes puis armures</option><option value="lieu">Lieu de stockage</option></select></label>
+    <label>Envoyer vers<select id="cibleTransfert"><option value="coffre">Coffre</option></select></label>
     <label>Recherche<input id="recherche" type="search" placeholder="Nom d’une pièce…"></label>
   </section>
   <div class="inventory-heading"><h2>Équipement disponible</h2><span id="compteur"></span></div>
@@ -54,12 +61,18 @@
     const filtrePersonnage = document.getElementById("filtrePersonnage");
     const filtreType = document.getElementById("filtreType");
     const filtreLieu = document.getElementById("filtreLieu");
+    const tri = document.getElementById("tri");
+    const cibleTransfert = document.getElementById("cibleTransfert");
     const recherche = document.getElementById("recherche");
     const CLASSES = { 0: "Titan", 1: "Chasseur", 2: "Arcaniste" };
     const SLOTS_ARMURE = { 3448274439:"Casque", 3551918588:"Gants", 14239492:"Torse", 20886954:"Jambes", 1585787867:"Objet de classe" };
     const SLOTS_ARME = { 1498876634:"Arme cinétique", 2465295065:"Arme énergétique", 953998645:"Arme lourde" };
     let tousLesObjets = [];
     const nomsPersonnages = {};
+    let compteActif = null;
+    let socketsCharges = false;
+    let socketsParObjet = {};
+    const cacheDefinitions = new Map();
 
     async function appelerBungie(chemin) {
       const reponse = await VIGIE_BUNGIE.fetchApi(chemin, { headers: { Authorization: "Bearer " + jeton } });
@@ -78,6 +91,15 @@
           (!perso || objet.characterId === perso || objet.lieu === "Coffre") &&
           (!terme || objet.nom.toLocaleLowerCase("fr").includes(terme));
       });
+      const comparateurs = {
+        "nom": function (a,b) { return a.nom.localeCompare(b.nom, "fr"); },
+        "nom-reverse": function (a,b) { return b.nom.localeCompare(a.nom, "fr"); },
+        "emplacement": function (a,b) { return a.slot.localeCompare(b.slot, "fr") || a.nom.localeCompare(b.nom, "fr"); },
+        "rarete": function (a,b) { return Number(b.exotique)-Number(a.exotique) || a.nom.localeCompare(b.nom, "fr"); },
+        "categorie": function (a,b) { return a.type.localeCompare(b.type, "fr") || a.slot.localeCompare(b.slot, "fr") || a.nom.localeCompare(b.nom, "fr"); },
+        "lieu": function (a,b) { return a.lieu.localeCompare(b.lieu, "fr") || a.nom.localeCompare(b.nom, "fr"); }
+      };
+      visibles.sort(comparateurs[tri.value] || comparateurs.nom);
       document.getElementById("compteur").textContent = visibles.length + " pièce(s)";
       zoneObjets.replaceChildren();
       if (!visibles.length) {
@@ -103,14 +125,126 @@
         meta.className = "item-meta";
         const gardien = objet.characterId ? " · " + (nomsPersonnages[objet.characterId] || "Personnage") : "";
         meta.textContent = objet.slot + " · " + objet.lieu + gardien;
-        info.append(nom, meta);
+        const actions = document.createElement("div");
+        actions.className = "item-actions";
+        const perksButton = document.createElement("button");
+        perksButton.type = "button";
+        perksButton.textContent = "Voir les perks";
+        const perks = document.createElement("div");
+        perks.hidden = true;
+        perks.className = "perk-list";
+        perksButton.addEventListener("click", async function () {
+          if (!perks.hidden) { perks.hidden = true; perksButton.textContent = "Voir les perks"; return; }
+          perks.hidden = false;
+          perks.textContent = "Lecture des perks installés…";
+          perksButton.disabled = true;
+          try { await afficherPerks(objet, perks); perksButton.textContent = "Masquer les perks"; }
+          catch (erreur) { perks.textContent = "Perks indisponibles : " + erreur.message; }
+          finally { perksButton.disabled = false; }
+        });
+        actions.appendChild(perksButton);
+        const boutonTransfert = document.createElement("button");
+        boutonTransfert.type = "button";
+        boutonTransfert.textContent = "Transférer";
+        boutonTransfert.disabled = objet.lieu === "Équipée" || !objet.idInstance;
+        boutonTransfert.title = boutonTransfert.disabled ? "L’objet doit être dans le coffre ou l’inventaire." : "Transférer avec l’API Bungie";
+        boutonTransfert.addEventListener("click", async function () {
+          const destination = cibleTransfert.value;
+          if ((destination === "coffre" && objet.lieu === "Coffre") || (destination !== "coffre" && objet.lieu === "Inventaire" && objet.characterId === destination)) {
+            statut.textContent = "Cette pièce est déjà à cet emplacement.";
+            return;
+          }
+          const nomDestination = destination === "coffre" ? "le coffre" : nomsPersonnages[destination];
+          if (!confirm("Transférer « " + objet.nom + " » vers " + nomDestination + " ?")) return;
+          boutonTransfert.disabled = true;
+          try { await transfererObjet(objet, destination); }
+          catch (erreur) { statut.textContent = "Transfert impossible : " + erreur.message; afficher(); }
+          finally { boutonTransfert.disabled = false; }
+        });
+        actions.appendChild(boutonTransfert);
+        info.append(nom, meta, actions, perks);
         carte.append(image, info);
         zoneObjets.appendChild(carte);
       });
     }
 
-    [filtrePersonnage, filtreType, filtreLieu].forEach(function (filtre) { filtre.addEventListener("change", afficher); });
+    [filtrePersonnage, filtreType, filtreLieu, tri].forEach(function (filtre) { filtre.addEventListener("change", afficher); });
     recherche.addEventListener("input", afficher);
+
+    async function envoyerOrdreTransfert(objet, characterId, transferToVault) {
+      const reponse = await VIGIE_BUNGIE.fetchApi("/Destiny2/Actions/Items/TransferItem/", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + jeton, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemReferenceHash: objet.hash,
+          stackSize: 1,
+          transferToVault: transferToVault,
+          itemId: objet.idInstance,
+          characterId: characterId,
+          membershipType: compteActif.membershipType
+        })
+      });
+      const donnees = await reponse.json();
+      if (!reponse.ok || donnees.ErrorStatus !== "Success") throw new Error(donnees.Message || donnees.error || donnees.ErrorStatus || "Bungie a refusé le transfert.");
+      await new Promise(function (resolve) { setTimeout(resolve, 350); });
+    }
+
+    async function transfererObjet(objet, destination) {
+      if (objet.lieu === "Équipée") throw new Error("Déséquipe cette pièce dans le jeu avant de la transférer.");
+      if (destination === "coffre") {
+        if (objet.lieu === "Coffre") return;
+        await envoyerOrdreTransfert(objet, objet.characterId, true);
+        objet.lieu = "Coffre";
+        objet.characterId = "";
+      } else if (objet.lieu === "Coffre") {
+        await envoyerOrdreTransfert(objet, destination, false);
+        objet.lieu = "Inventaire";
+        objet.characterId = destination;
+      } else if (objet.characterId !== destination) {
+        await envoyerOrdreTransfert(objet, objet.characterId, true);
+        objet.lieu = "Coffre";
+        objet.characterId = "";
+        await envoyerOrdreTransfert(objet, destination, false);
+        objet.lieu = "Inventaire";
+        objet.characterId = destination;
+      } else {
+        statut.textContent = "Cette pièce est déjà dans l’inventaire choisi.";
+        return;
+      }
+      statut.textContent = objet.nom + " a été transféré vers " + (destination === "coffre" ? "le coffre" : nomsPersonnages[destination]) + ".";
+      afficher();
+    }
+
+    async function afficherPerks(objet, conteneur) {
+      if (!objet.idInstance) throw new Error("Cet objet ne possède pas de sockets individuels.");
+      if (!socketsCharges) {
+        const profil = await appelerBungie("/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=305");
+        socketsParObjet = profil.itemComponents && profil.itemComponents.sockets && profil.itemComponents.sockets.data || {};
+        socketsCharges = true;
+      }
+      const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
+      const hashs = Array.from(new Set(etats.filter(function (socket) { return socket && socket.plugHash && socket.isEnabled !== false; }).map(function (socket) { return Number(socket.plugHash); })));
+      const details = [];
+      for (const hash of hashs) {
+        let definition = cacheDefinitions.get(hash);
+        if (!definition) {
+          definition = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/");
+          cacheDefinitions.set(hash, definition);
+        }
+        const props = definition.displayProperties || {};
+        if (props.name) details.push({ nom: props.name, description: props.description || "" });
+      }
+      conteneur.replaceChildren();
+      if (!details.length) { conteneur.textContent = "Aucun perk ou mod installé n’a été retourné pour cette pièce."; return; }
+      const titre = document.createElement("strong");
+      titre.textContent = "Perks et mods installés : ";
+      conteneur.appendChild(titre);
+      details.forEach(function (detail, index) {
+        if (index) conteneur.appendChild(document.createTextNode(" · "));
+        const texte = detail.nom + (detail.description ? " — " + detail.description : "");
+        conteneur.appendChild(document.createTextNode(texte));
+      });
+    }
 
     async function charger() {
       if (!jeton) { statut.textContent = "Tu n’es pas connecté : connecte-toi avec Bungie pour charger ton arsenal."; return; }
@@ -119,6 +253,7 @@
         try { memberships = await appelerBungie("/User/GetMembershipsForCurrentUser/"); }
         catch (_) { memberships = await appelerBungie("/User/GetMembershipsById/" + sessionStorage.getItem("membershipId") + "/-1/"); }
         const compte = memberships.destinyMemberships.find(function (m) { return m.membershipId === memberships.primaryMembershipId; }) || memberships.destinyMemberships[0];
+        compteActif = compte;
         const profil = await appelerBungie("/Destiny2/" + compte.membershipType + "/Profile/" + compte.membershipId + "/?components=102,200,201,205");
         const manifest = await appelerBungie("/Destiny2/Manifest/");
         const chemin = manifest.jsonWorldComponentContentPaths.fr.DestinyInventoryItemLiteDefinition || manifest.jsonWorldComponentContentPaths.fr.DestinyInventoryItemDefinition;
@@ -134,6 +269,10 @@
           option.value = id;
           option.textContent = nom;
           filtrePersonnage.appendChild(option);
+          const optionTransfert = document.createElement("option");
+          optionTransfert.value = id;
+          optionTransfert.textContent = nom;
+          cibleTransfert.appendChild(optionTransfert);
           const carte = document.createElement("article");
           carte.className = "guardian";
           const titre = document.createElement("strong");
@@ -143,6 +282,7 @@
           carte.append(titre, detail);
           zoneGardiens.appendChild(carte);
         }
+        if (Object.keys(persos).length) cibleTransfert.value = Object.keys(persos)[0];
 
         const items = [];
         function ajouter(liste, lieu, characterId) {
@@ -175,6 +315,7 @@
             type:type,
             slot:SLOTS_ARMURE[bucket] || SLOTS_ARME[bucket] || (type === "arme" ? "Arme" : "Armure"),
             exotique:Number(definition.inventory.tierType) === 6,
+            rarete:Number(definition.inventory.tierType) || 0,
             lieu:element.lieu,
             characterId:element.characterId
           });

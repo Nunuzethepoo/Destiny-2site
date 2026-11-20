@@ -1,6 +1,5 @@
 (() => {
   const links = [
-    ["index.html", "Accueil"],
     ["generateur.html", "Builds"],
     ["arsenal.html", "Arsenal"],
     ["equiper.html", "Équiper"]
