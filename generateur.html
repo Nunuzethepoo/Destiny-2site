@@ -43,6 +43,13 @@
     .piece img{width:38px;height:38px;object-fit:cover;border:1px solid #46515e;border-radius:2px}
     .bonus-result{padding:10px 12px;border:1px solid #d4ad6840;background:#d4ad6809;color:#e5cc9d;font-size:11px;line-height:1.5}
     .stats{margin:12px 0;color:#b4c2ce;font-size:11px;line-height:1.6}
+    .build-stats{margin:14px 0;padding:13px;border:1px solid #344251;border-radius:3px;background:#0a1016}
+    .build-stats-title{margin:0 0 10px;color:#aebbc7;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    .build-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+    .build-stat{display:flex;align-items:center;justify-content:space-between;gap:5px;min-height:36px;padding:7px 9px;border:1px solid #27323e;border-radius:2px;background:#111820}
+    .build-stat span{color:#b4c2ce;font-size:10px}
+    .build-stat strong{color:var(--gold);font:700 15px ui-monospace,monospace}
+    @media(max-width:480px){.build-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     .save-build{width:100%;min-height:40px;border:1px solid #b9975d;color:var(--gold);background:#d4ad680d;font-weight:700;cursor:pointer}
     .save-build:hover{background:#d4ad6822}
     .page-links{margin:22px 0 0;color:var(--muted);font-size:11px}.page-links a{margin-right:10px}
@@ -821,18 +828,43 @@
           bloc.appendChild(ligne);
         }
 
-        // Les totaux, stat par stat
-        const totauxParHash = {};
+        // Afficher les six valeurs même si une définition de nom manque.
+        const nomsStatsSecours = ["Mobilité", "Résistance", "Récupération", "Discipline", "Intellect", "Force"];
+        const totaux = resultat.totaux || STATS_ARMURE.map(function (_, k) {
+          return resultat.choix.reduce(function (somme, choix) {
+            return somme + Number(choix.v && choix.v[k] || 0);
+          }, 0);
+        });
+        const blocStats = document.createElement("div");
+        blocStats.className = "build-stats";
+        const titreStats = document.createElement("p");
+        titreStats.className = "build-stats-title";
+        titreStats.textContent = "Statistiques estimées · mods inclus";
+        blocStats.appendChild(titreStats);
+        const grilleStats = document.createElement("div");
+        grilleStats.className = "build-stat-grid";
         let depasse = false;
         STATS_ARMURE.forEach(function (hash, k) {
-          totauxParHash[hash] = resultat.totaux[k];
-          if (resultat.totaux[k] > MAX_STAT) { depasse = true; }
+          const valeur = Number(totaux[k]) || 0;
+          if (valeur > MAX_STAT) depasse = true;
+          const cellule = document.createElement("div");
+          cellule.className = "build-stat";
+          const nom = document.createElement("span");
+          nom.textContent = definitionsStats[hash] && definitionsStats[hash].displayProperties
+            ? definitionsStats[hash].displayProperties.name : nomsStatsSecours[k];
+          const nombre = document.createElement("strong");
+          nombre.textContent = String(valeur);
+          cellule.append(nom, nombre);
+          grilleStats.appendChild(cellule);
         });
-        const stats = document.createElement("p");
-        stats.className = "stats";
-        stats.textContent = "Totaux : " + texteStats(totauxParHash) +
-          (depasse ? " (au-delà de " + MAX_STAT + ", les points sont perdus)" : "");
-        bloc.appendChild(stats);
+        blocStats.appendChild(grilleStats);
+        if (depasse) {
+          const note = document.createElement("p");
+          note.className = "stats";
+          note.textContent = "Au-delà de " + MAX_STAT + ", les points supplémentaires ne montent plus le niveau de stat.";
+          blocStats.appendChild(note);
+        }
+        bloc.appendChild(blocStats);
 
         // Sauvegarde dans les sets
         const bouton = document.createElement("button");
