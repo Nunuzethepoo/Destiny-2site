@@ -431,16 +431,19 @@
     async function indexerPerksArmes() {
       try {
         await chargerSockets();
-        const repliIndividuel = await chargerPerksIndividuelsManquants();
         const armes = tousLesObjets.filter(function (objet) { return objet.type === "arme"; });
         armes.forEach(function (objet) { objet.perks = perksActifsPourObjet(objet); });
         perksArmesCharges = true;
         afficher();
-        const nombrePlugs = await chargerDefinitionsPerksArmes();
-        armes.forEach(function (objet) { objet.perks = perksActifsPourObjet(objet); });
-        afficher();
-        const armesAvecPerks = armes.filter(function (objet) { return objet.perks.length; }).length;
-        statut.textContent = "Perks Bungie chargés pour " + armesAvecPerks + "/" + armes.length + " armes · " + nombrePlugs + " perks/plugs analysés" + (repliIndividuel.demandes ? " · lecture détaillée " + (repliIndividuel.demandes - repliIndividuel.erreurs) + "/" + repliIndividuel.demandes : "") + ".";
+        statut.textContent = "Perks affichés · traduction des noms en cours en arrière-plan…";
+        chargerDefinitionsPerksArmes().then(function (nombrePlugs) {
+          armes.forEach(function (objet) { objet.perks = perksActifsPourObjet(objet); });
+          afficher();
+          const armesAvecPerks = armes.filter(function (objet) { return objet.perks.length; }).length;
+          statut.textContent = "Perks chargés pour " + armesAvecPerks + "/" + armes.length + " armes · noms Bungie mis à jour (" + nombrePlugs + " définitions).";
+        }).catch(function (erreur) {
+          statut.textContent = "Perks affichés ; certains noms n’ont pas pu être traduits : " + erreur.message;
+        });
       } catch (erreur) {
         statut.textContent = "Arsenal chargé, mais les perks des armes sont indisponibles : " + erreur.message;
       }
