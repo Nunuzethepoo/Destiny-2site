@@ -134,7 +134,7 @@
 
       try {
         const perso = personnages[idPersonnage];
-        const classeDuSet = set.pieces[0].classe;
+        const classeDuSet = set.pieces && set.pieces[0] && set.pieces[0].classe;
         if (perso.classType !== classeDuSet) {
           ecrire("Ce set est pour la classe " + CLASSES[classeDuSet] +
                  " : choisis un personnage de cette classe.");
@@ -149,7 +149,8 @@
 
         const aEquiper = [];
 
-        for (const piece of set.pieces) {
+        const objetsDuSet = (set.pieces || []).concat(set.armes || []);
+        for (const piece of objetsDuSet) {
           const lieu = lieux[piece.idInstance];
 
           if (!lieu) {
@@ -198,7 +199,7 @@
 
         const sockets = (profil.itemComponents && profil.itemComponents.sockets && profil.itemComponents.sockets.data) || {};
         let modsAppliques = 0;
-        for (const piece of set.pieces) {
+        for (const piece of (set.pieces || [])) {
           for (const mod of (piece.mods || [])) {
             try {
               const actuel = sockets[piece.idInstance] && sockets[piece.idInstance].sockets && sockets[piece.idInstance].sockets[mod.socketIndex];
@@ -216,7 +217,13 @@
             }
           }
         }
-        ecrire(aEquiper.length || modsAppliques ? "Terminé : " + aEquiper.length + " pièce(s) équipée(s), " + modsAppliques + " mod(s) appliqué(s)." : "Aucun changement nécessaire.");
+        if (set.doctrine) {
+          ecrire("Doctrine prévue : " + set.doctrine.nom + ". Vérifie ses aspects, fragments et capacités en jeu.");
+        }
+        if (set.artefact && set.artefact.perks && set.artefact.perks.length) {
+          ecrire("Mods d’artefact prévus : " + set.artefact.perks.map(function (perk) { return perk.nom; }).join(", ") + ". Vérifie leur sélection en jeu.");
+        }
+        ecrire(aEquiper.length || modsAppliques ? "Terminé : " + aEquiper.length + " objet(s) équipé(s), " + modsAppliques + " mod(s) appliqué(s)." : "Aucun changement nécessaire.");
       } catch (erreur) {
         ecrire("Erreur : " + erreur.message);
       }
@@ -235,14 +242,19 @@
         const bloc = document.createElement("div");
         bloc.className = "set";
 
-        const noms = set.pieces.map(function (p) { return p.nom; }).join(", ");
+        const objets = (set.pieces || []).concat(set.armes || []);
+        const noms = objets.map(function (p) { return p.nom; }).join(", ");
         const texte = document.createElement("span");
-        texte.textContent = set.nom + " (" + noms + ") ";
+        const detailsBuild = [];
+        if (set.doctrine && set.doctrine.nom) detailsBuild.push("doctrine : " + set.doctrine.nom);
+        if (set.artefact && set.artefact.perks && set.artefact.perks.length) detailsBuild.push("artefact : " + set.artefact.perks.length + " mods");
+        texte.textContent = set.nom + " (" + noms + ")" + (detailsBuild.length ? " · " + detailsBuild.join(" · ") : "") + " ";
 
         const bouton = document.createElement("button");
         bouton.textContent = "Équiper ce set";
         bouton.addEventListener("click", async function () {
-          const idPersonnage = choixPersonnage.value;
+          const idPersonnage = set.characterId && personnages[set.characterId] ? set.characterId : choixPersonnage.value;
+          choixPersonnage.value = idPersonnage;
           const perso = personnages[idPersonnage];
           const question = "Équiper « " + set.nom + " » sur " + CLASSES[perso.classType] + " ?";
           if (confirm(question)) {

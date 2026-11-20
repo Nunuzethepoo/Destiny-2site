@@ -19,6 +19,17 @@
     .builder-control select,.stat-minimum{width:100%;min-height:42px;padding:10px 12px;border:1px solid #344251;border-radius:3px;background:#0a1016;color:#edf1f4;font:13px 'DM Sans',sans-serif}
     .builder-control select:focus,.stat-minimum:focus{outline:2px solid #e6bb7280;border-color:var(--gold)}
     .bonus-info{min-height:62px;padding:12px;border:1px solid #d4ad6840;border-radius:3px;background:#d4ad6809;color:#c7b999;font-size:11px;line-height:1.65}
+    .builder-subsection{display:grid;gap:10px;padding-top:14px;border-top:1px solid var(--line)}
+    .builder-subsection h3{margin:0;color:var(--gold);font:700 15px 'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase}
+    .builder-subsection>p{margin:0;color:var(--muted);font-size:13px;line-height:1.6}
+    .builder-subsection .builder-control{font-size:12px}
+    .weapon-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+    .artifact-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:7px}
+    .artifact-choice{display:flex;align-items:center;gap:8px;min-height:42px;padding:7px 9px;border:1px solid #27323e;border-radius:3px;background:#0a1016;color:#cbd4dc;font-size:12px;line-height:1.4}
+    .artifact-choice input{flex:0 0 auto;accent-color:var(--gold)}
+    .artifact-choice img{width:27px;height:27px;object-fit:contain}
+    .context-panel{padding:10px 12px;border:1px solid #344251;border-radius:3px;background:#0a1016;color:#cbd4dc;font-size:12px;line-height:1.6}
+    .context-panel strong{color:#edf1f4}
     .stats-table{width:100%;border-collapse:separate;border-spacing:0 7px;table-layout:fixed}
     .stats-table th{padding:0 10px 5px;color:#81909e;text-align:left;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
     .stats-table th:first-child{width:28%}.stats-table th:nth-child(2){width:44%}.stats-table th:nth-child(3){width:28%}
@@ -49,7 +60,7 @@
     .build-stat{display:flex;align-items:center;justify-content:space-between;gap:5px;min-height:36px;padding:7px 9px;border:1px solid #27323e;border-radius:2px;background:#111820}
     .build-stat span{color:#b4c2ce;font-size:10px}
     .build-stat strong{color:var(--gold);font:700 15px ui-monospace,monospace}
-    @media(max-width:480px){.build-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:520px){.build-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.weapon-grid{grid-template-columns:1fr}}
     .save-build{width:100%;min-height:40px;border:1px solid #b9975d;color:var(--gold);background:#d4ad680d;font-weight:700;cursor:pointer}
     .save-build:hover{background:#d4ad6822}
     .page-links{margin:22px 0 0;color:var(--muted);font-size:11px}.page-links a{margin-right:10px}
@@ -74,6 +85,7 @@
             <option value="2">Arcaniste</option>
           </select>
         </label>
+        <label class="builder-control" for="choixPersonnage"><span>Gardien de ce build</span><select id="choixPersonnage"></select></label>
         <label class="builder-control" for="choixExotique"><span>Pièce exotique</span><select id="choixExotique"></select></label>
         <label class="builder-control" for="choixBonus"><span>Bonus d’armure souhaité</span>
           <select id="choixBonus"><option value="">Aucun bonus imposé</option></select>
@@ -83,6 +95,26 @@
           <span style="text-transform:none;letter-spacing:0">Inclure aussi les armures du coffre</span>
         </label>
         <p id="bonusInfo" class="bonus-info" aria-live="polite">Les bonus disponibles apparaîtront selon l’armure de ton inventaire. Les bonus demandent généralement 2 ou 4 pièces du même set.</p>
+        <div class="builder-subsection">
+          <h3>Doctrine / sous-classe</h3>
+          <label class="builder-control" for="choixDoctrine"><span>Doctrine prévue</span><select id="choixDoctrine"></select></label>
+          <p id="doctrineInfo" class="context-panel" aria-live="polite">Lecture de la doctrine du Gardien…</p>
+        </div>
+        <div class="builder-subsection">
+          <h3>Armes du build</h3>
+          <p>Choisis les armes de chaque emplacement. Les armes de ton inventaire et de ton coffre sont proposées.</p>
+          <div class="weapon-grid">
+            <label class="builder-control" for="armeCinétique"><span>Cinétique</span><select id="armeCinétique"></select></label>
+            <label class="builder-control" for="armeÉnergie"><span>Énergie</span><select id="armeÉnergie"></select></label>
+            <label class="builder-control" for="armeLourde"><span>Puissante</span><select id="armeLourde"></select></label>
+          </div>
+        </div>
+        <div class="builder-subsection">
+          <h3>Mods de l’artefact saisonnier</h3>
+          <p id="artefactInfo" aria-live="polite">Lecture des mods de l’artefact…</p>
+          <div id="artefactMods" class="artifact-list"></div>
+        </div>
+        <p class="bonus-info">Les mods de statistiques sur les armures sont calculés automatiquement selon tes priorités, puis sauvegardés avec le build. Les choix de doctrine et d’artefact sont enregistrés comme plan à suivre en jeu.</p>
       </div>
     </section>
 
@@ -111,9 +143,14 @@
     const message = document.getElementById("message");
     const formulaire = document.getElementById("formulaire");
     const choixClasse = document.getElementById("choixClasse");
+    const choixPersonnage = document.getElementById("choixPersonnage");
+    const choixDoctrine = document.getElementById("choixDoctrine");
     const choixExotique = document.getElementById("choixExotique");
     const choixBonus = document.getElementById("choixBonus");
     const bonusInfo = document.getElementById("bonusInfo");
+    const doctrineInfo = document.getElementById("doctrineInfo");
+    const artefactInfo = document.getElementById("artefactInfo");
+    const zoneArtefactMods = document.getElementById("artefactMods");
     const tableStats = document.getElementById("tableStats");
     const zoneResultats = document.getElementById("resultats");
 
@@ -126,12 +163,25 @@
     };
     const ORDRE = ["Casque", "Gants", "Torse", "Jambes", "Objet de classe"];
     const STATS_ARMURE = [2996146975, 392767087, 1943323491, 1735777505, 144602215, 4244567218];
+    const BUCKETS_ARMES = {
+      1498876634: { nom: "Cinétique", id: "armeCinétique" },
+      2465295065: { nom: "Énergie", id: "armeÉnergie" },
+      953998645: { nom: "Puissante", id: "armeLourde" }
+    };
+    const BUCKET_DOCTRINE = 328539;
+    const CLASSES = { 0: "Titan", 1: "Chasseur", 2: "Arcaniste" };
 
     let definitionsStats = {};
     let definitionsSets = {};
     let definitionsPerks = {};
+    let definitionsLite = {};
+    let definitionsArtefacts = {};
     let optionsBonus = new Map();
     let toutesLesArmures = [];
+    let toutesLesArmes = [];
+    let profilActif = null;
+    let plansDoctrine = {};
+    let plansArtefact = {};
     let socketParInstance = {};
     let definitionMods = {};
     let characterPlugSets = {};
@@ -155,7 +205,7 @@
     async function chargerDefinitions(hashesArmure, progression) {
       const manifest = await appelerBungie("/Destiny2/Manifest/");
       const chemins = manifest.jsonWorldComponentContentPaths[LANGUE];
-      let cache = { version: manifest.version, objets: {}, sets: {}, perks: {}, stats: null };
+      let cache = { version: manifest.version, objets: {}, sets: {}, perks: {}, stats: null, artefacts: null };
       try {
         const enCache = JSON.parse(localStorage.getItem("vigieBuildDefsCache"));
         if (enCache && enCache.version === manifest.version) cache = enCache;
@@ -171,6 +221,7 @@
       }
 
       const stats = cache.stats || await lireFichier(chemins.DestinyStatDefinition);
+      const artefacts = cache.artefacts || await lireFichier(chemins.DestinyArtifactDefinition);
       // Le coffre regroupe plusieurs buckets de profil : bucketHash n'est pas
       // toujours l'emplacement normal de l'objet. Le manifeste Lite permet de
       // reconnaître les armures du coffre sans interroger chaque objet un par un.
@@ -273,10 +324,11 @@
           objets: objetsEnCache,
           sets: setsEnCache,
           perks: perksEnCache,
-          stats: stats
+          stats: stats,
+          artefacts: artefacts
         }));
       } catch (_) {}
-      return { objets: objets, stats: stats, sets: sets, perks: perks, nombreArmures: hashesArmureReels.length };
+      return { objets: objets, objetsLite: objetsLite, stats: stats, sets: sets, perks: perks, artefacts: artefacts, nombreArmures: hashesArmureReels.length };
     }
 
     function plugsPourSocket(socket, hashSet) {
@@ -554,9 +606,263 @@
       }).join("  ·  ") + " (au moins " + bonus.requiredCount + " pièces).";
     }
 
-    choixClasse.addEventListener("change", function () { majExotiques(); majBonus(); });
-    document.getElementById("inclureCoffre").addEventListener("change", function () { majExotiques(); majBonus(); });
+    function personnagesPourClasse() {
+      const donnees = profilActif && profilActif.characters && profilActif.characters.data || {};
+      return Object.keys(donnees).map(function (id) {
+        return { id: id, data: donnees[id] };
+      }).filter(function (personnage) {
+        return Number(personnage.data.classType) === Number(choixClasse.value);
+      }).sort(function (a, b) {
+        return String(b.data.dateLastPlayed || "").localeCompare(String(a.data.dateLastPlayed || ""));
+      });
+    }
+
+    function remplirDoctrine() {
+      const idPersonnage = choixPersonnage.value;
+      const actuel = profilActif && profilActif.characterEquipment && profilActif.characterEquipment.data && profilActif.characterEquipment.data[idPersonnage];
+      const objetActuel = actuel && (actuel.items || []).find(function (objet) { return Number(objet.bucketHash) === BUCKET_DOCTRINE; });
+      const hashActuel = Number(objetActuel && objetActuel.itemHash) || 0;
+      const options = Object.keys(definitionsLite).map(function (hash) {
+        const definition = definitionsLite[hash];
+        return { hash: Number(hash), definition: definition };
+      }).filter(function (entree) {
+        const definition = entree.definition;
+        return definition && definition.inventory && Number(definition.inventory.bucketTypeHash) === BUCKET_DOCTRINE &&
+          Number(definition.classType) === Number(choixClasse.value) && definition.displayProperties && definition.displayProperties.name;
+      });
+      if (hashActuel && !options.some(function (entree) { return entree.hash === hashActuel; })) {
+        const definitionActuelle = definitionsLite[hashActuel];
+        if (definitionActuelle) options.push({ hash: hashActuel, definition: definitionActuelle });
+      }
+      options.sort(function (a, b) {
+        return a.definition.displayProperties.name.localeCompare(b.definition.displayProperties.name, "fr");
+      });
+      choixDoctrine.innerHTML = "";
+      if (!options.length) {
+        const indisponible = document.createElement("option");
+        indisponible.value = "";
+        indisponible.textContent = "Aucune doctrine trouvée";
+        choixDoctrine.appendChild(indisponible);
+        return;
+      }
+      for (const entree of options) {
+        const option = document.createElement("option");
+        option.value = String(entree.hash);
+        option.textContent = entree.definition.displayProperties.name;
+        choixDoctrine.appendChild(option);
+      }
+      const souhaite = Number(plansDoctrine[idPersonnage]) || hashActuel || options[0].hash;
+      choixDoctrine.value = options.some(function (entree) { return entree.hash === souhaite; }) ? String(souhaite) : String(options[0].hash);
+      plansDoctrine[idPersonnage] = Number(choixDoctrine.value);
+    }
+
+    function afficherDoctrineEtArtefact() {
+      const idPersonnage = choixPersonnage.value;
+      const personnage = profilActif && profilActif.characters && profilActif.characters.data && profilActif.characters.data[idPersonnage];
+      if (!personnage) {
+        doctrineInfo.textContent = "Aucun Gardien de cette classe n’a été trouvé.";
+        artefactInfo.textContent = "Aucun artefact disponible pour ce Gardien.";
+        zoneArtefactMods.innerHTML = "";
+        return;
+      }
+
+      const equipement = profilActif.characterEquipment && profilActif.characterEquipment.data && profilActif.characterEquipment.data[idPersonnage];
+      const objetDoctrine = equipement && (equipement.items || []).find(function (objet) { return Number(objet.bucketHash) === BUCKET_DOCTRINE; });
+      const hashDoctrine = Number(choixDoctrine.value) || Number(objetDoctrine && objetDoctrine.itemHash) || 0;
+      const definitionDoctrine = definitionsLite[hashDoctrine];
+      const estDoctrineActuelle = Number(objetDoctrine && objetDoctrine.itemHash) === hashDoctrine;
+      const socketsDoctrine = estDoctrineActuelle && objetDoctrine && objetDoctrine.itemInstanceId && socketParInstance[objetDoctrine.itemInstanceId];
+      const prisesDoctrine = socketsDoctrine && socketsDoctrine.sockets || [];
+      const nomsPrises = prisesDoctrine.map(function (prise) {
+        const hash = Number(prise.plugHash) || 0;
+        const definition = definitionsLite[hash];
+        return definition && definition.displayProperties && definition.displayProperties.name;
+      }).filter(function (nom) { return nom && nom !== "Inconnu"; });
+      const nomDoctrine = definitionDoctrine && definitionDoctrine.displayProperties && definitionDoctrine.displayProperties.name;
+      doctrineInfo.textContent = nomDoctrine
+        ? (estDoctrineActuelle ? "Équipée actuellement : " : "À prévoir : ") + nomDoctrine +
+          (nomsPrises.length ? " · configuration actuelle : " + nomsPrises.join(" · ") : "")
+        : "Doctrine actuelle introuvable dans les données Bungie.";
+
+      const progression = profilActif.characterProgressions && profilActif.characterProgressions.data && profilActif.characterProgressions.data[idPersonnage];
+      const artefactActif = progression && progression.seasonalArtifact;
+      const artefactHash = Number(artefactActif && artefactActif.artifactHash) || Number(profilActif.profileProgression && profilActif.profileProgression.data && profilActif.profileProgression.data.seasonalArtifact && profilActif.profileProgression.data.seasonalArtifact.artifactHash);
+      const definitionArtefact = definitionsArtefacts[artefactHash];
+      const nomArtefact = definitionArtefact && definitionArtefact.displayProperties && definitionArtefact.displayProperties.name || "Artefact saisonnier";
+      const niveaux = artefactActif && artefactActif.tiers || [];
+      const choixDisponibles = [];
+      const choixActifs = [];
+      for (const niveau of niveaux) {
+        for (const mod of (niveau.items || [])) {
+          const hash = Number(mod.itemHash);
+          if (!hash || mod.isVisible === false) continue;
+          const definition = definitionsLite[hash];
+          const choix = {
+            hash: hash,
+            nom: definition && definition.displayProperties && definition.displayProperties.name || "Mod " + hash,
+            icone: definition && definition.displayProperties && definition.displayProperties.icon || "",
+            actif: Boolean(mod.isActive)
+          };
+          choixDisponibles.push(choix);
+          if (choix.actif) choixActifs.push(hash);
+        }
+      }
+
+      if (!artefactHash || !choixDisponibles.length) {
+        artefactInfo.textContent = "Les choix de l’artefact ne sont pas disponibles pour ce Gardien.";
+        zoneArtefactMods.innerHTML = "";
+        delete plansArtefact[idPersonnage];
+        return;
+      }
+
+      if (!Array.isArray(plansArtefact[idPersonnage])) plansArtefact[idPersonnage] = choixActifs;
+      const nombreMaximum = Math.max(Number(artefactActif && artefactActif.pointsUsed) || 0, choixActifs.length);
+      artefactInfo.textContent = nomArtefact + " · " + plansArtefact[idPersonnage].length + " choix pour " + nombreMaximum + " emplacement(s). Ces choix sont enregistrés avec le build; Bungie ne permet pas de les modifier par VIGIE.";
+      zoneArtefactMods.innerHTML = "";
+      for (const choix of choixDisponibles) {
+        const ligne = document.createElement("label");
+        ligne.className = "artifact-choice";
+        const caseMod = document.createElement("input");
+        caseMod.type = "checkbox";
+        caseMod.checked = plansArtefact[idPersonnage].indexOf(choix.hash) !== -1;
+        caseMod.setAttribute("aria-label", choix.nom);
+        caseMod.addEventListener("change", function () {
+          const plan = plansArtefact[idPersonnage] || [];
+          if (caseMod.checked && plan.length >= nombreMaximum) {
+            caseMod.checked = false;
+            artefactInfo.textContent = "Limite actuelle atteinte (" + nombreMaximum + "). Décoche un choix avant d’en sélectionner un autre.";
+            return;
+          }
+          plansArtefact[idPersonnage] = caseMod.checked
+            ? plan.concat([choix.hash])
+            : plan.filter(function (hash) { return Number(hash) !== choix.hash; });
+          afficherDoctrineEtArtefact();
+        });
+        ligne.appendChild(caseMod);
+        if (choix.icone) {
+          const image = document.createElement("img");
+          image.src = "https://www.bungie.net" + choix.icone;
+          image.alt = "";
+          ligne.appendChild(image);
+        }
+        const nom = document.createElement("span");
+        nom.textContent = choix.nom;
+        ligne.appendChild(nom);
+        zoneArtefactMods.appendChild(ligne);
+      }
+    }
+
+    function remplirPersonnages() {
+      const anciensId = choixPersonnage.value;
+      const liste = personnagesPourClasse();
+      choixPersonnage.innerHTML = "";
+      for (const personnage of liste) {
+        const option = document.createElement("option");
+        option.value = personnage.id;
+        option.textContent = CLASSES[personnage.data.classType] || "Gardien";
+        choixPersonnage.appendChild(option);
+      }
+      if (liste.some(function (personnage) { return personnage.id === anciensId; })) choixPersonnage.value = anciensId;
+      remplirDoctrine();
+      afficherArmes();
+      afficherDoctrineEtArtefact();
+    }
+
+    function afficherArmes() {
+      const idPersonnage = choixPersonnage.value;
+      const classe = Number(choixClasse.value);
+      for (const bucketHash of Object.keys(BUCKETS_ARMES)) {
+        const slot = BUCKETS_ARMES[bucketHash];
+        const select = document.getElementById(slot.id);
+        const ancienneValeur = select.value;
+        select.innerHTML = "";
+        const aucune = document.createElement("option");
+        aucune.value = "";
+        aucune.textContent = "Ne pas changer";
+        select.appendChild(aucune);
+        const armes = toutesLesArmes.filter(function (arme) {
+          if (Number(arme.bucketHash) !== Number(bucketHash)) return false;
+          if (arme.classe !== undefined && Number(arme.classe) !== -1 && Number(arme.classe) !== classe) return false;
+          return arme.lieu !== "Équipée" || arme.idPersonnage === idPersonnage;
+        }).sort(function (a, b) { return a.nom.localeCompare(b.nom, "fr"); });
+        for (const arme of armes) {
+          const option = document.createElement("option");
+          option.value = arme.idInstance;
+          option.textContent = arme.nom + " · " + arme.lieuLabel;
+          select.appendChild(option);
+        }
+        if (armes.some(function (arme) { return String(arme.idInstance) === ancienneValeur; })) select.value = ancienneValeur;
+      }
+    }
+
+    function contexteBuild() {
+      const personnage = profilActif && profilActif.characters && profilActif.characters.data && profilActif.characters.data[choixPersonnage.value];
+      const doctrine = personnage && profilActif.characterEquipment && profilActif.characterEquipment.data && profilActif.characterEquipment.data[choixPersonnage.value];
+      const doctrineEquipee = doctrine && (doctrine.items || []).find(function (objet) { return Number(objet.bucketHash) === BUCKET_DOCTRINE; });
+      const hashDoctrine = Number(choixDoctrine.value) || Number(doctrineEquipee && doctrineEquipee.itemHash) || 0;
+      const objetDoctrine = doctrineEquipee && Number(doctrineEquipee.itemHash) === hashDoctrine ? doctrineEquipee : null;
+      const definitionDoctrine = definitionsLite[hashDoctrine];
+      const progression = profilActif && profilActif.characterProgressions && profilActif.characterProgressions.data && profilActif.characterProgressions.data[choixPersonnage.value];
+      const artefact = progression && progression.seasonalArtifact;
+      const artefactHash = Number(artefact && artefact.artifactHash) || 0;
+      const definitionArtefact = definitionsArtefacts[artefactHash];
+      const armes = [];
+      for (const bucketHash of Object.keys(BUCKETS_ARMES)) {
+        const id = document.getElementById(BUCKETS_ARMES[bucketHash].id).value;
+        const arme = toutesLesArmes.find(function (item) { return String(item.idInstance) === id; });
+        if (arme) armes.push({
+          nom: arme.nom,
+          icone: arme.icone,
+          emplacement: BUCKETS_ARMES[bucketHash].nom,
+          idInstance: arme.idInstance,
+          hash: arme.hash,
+          lieu: arme.lieuLabel
+        });
+      }
+      const plugs = [];
+      if (objetDoctrine && objetDoctrine.itemInstanceId) {
+        const donneesSockets = socketParInstance[objetDoctrine.itemInstanceId];
+        for (let index = 0; index < (donneesSockets && donneesSockets.sockets || []).length; index++) {
+          const hash = Number(donneesSockets.sockets[index].plugHash) || 0;
+          const definition = definitionsLite[hash];
+          if (hash && definition && definition.displayProperties && definition.displayProperties.name) {
+            plugs.push({ socketIndex: index, plugItemHash: hash, nom: definition.displayProperties.name, icone: definition.displayProperties.icon || "" });
+          }
+        }
+      }
+      const planArtefact = plansArtefact[choixPersonnage.value] || [];
+      const perksArtefact = planArtefact.map(function (hash) {
+        const definition = definitionsLite[hash];
+        return { hash: Number(hash), nom: definition && definition.displayProperties && definition.displayProperties.name || "Mod " + hash, icone: definition && definition.displayProperties && definition.displayProperties.icon || "" };
+      });
+      return {
+        classe: Number(choixClasse.value),
+        characterId: choixPersonnage.value || null,
+        characterName: personnage ? CLASSES[personnage.classType] || "Gardien" : "Gardien",
+        armes: armes,
+        doctrine: hashDoctrine ? {
+          hash: hashDoctrine,
+          idInstance: objetDoctrine && objetDoctrine.itemInstanceId || null,
+          nom: definitionDoctrine && definitionDoctrine.displayProperties && definitionDoctrine.displayProperties.name || "Doctrine choisie",
+          icone: definitionDoctrine && definitionDoctrine.displayProperties && definitionDoctrine.displayProperties.icon || "",
+          plugs: plugs
+        } : null,
+        artefact: artefactHash ? {
+          hash: artefactHash,
+          nom: definitionArtefact && definitionArtefact.displayProperties && definitionArtefact.displayProperties.name || "Artefact saisonnier",
+          perks: perksArtefact
+        } : null
+      };
+    }
+
+    choixClasse.addEventListener("change", function () { majExotiques(); majBonus(); remplirPersonnages(); });
+    choixPersonnage.addEventListener("change", function () { remplirDoctrine(); afficherArmes(); afficherDoctrineEtArtefact(); });
+    choixDoctrine.addEventListener("change", function () {
+      plansDoctrine[choixPersonnage.value] = Number(choixDoctrine.value) || 0;
+      afficherDoctrineEtArtefact();
+    });
     choixBonus.addEventListener("change", afficherInfoBonus);
+    document.getElementById("inclureCoffre").addEventListener("change", function () { majExotiques(); majBonus(); });
     document.getElementById("prioritesEquilibrees").addEventListener("click", function () {
       STATS_ARMURE.forEach(function (_, k) {
         document.getElementById("poids" + k).value = "5";
@@ -628,6 +934,7 @@
           piece.capaciteEnergie = Number(energie && energie.energyCapacity) || 10;
         }
         composantsModsCharges = true;
+        afficherDoctrineEtArtefact();
       }
 
       const hashesMods = [];
@@ -644,6 +951,7 @@
       message.textContent = "Analyse des mods de statistiques disponibles…";
       await chargerDefinitionsMods(Array.from(new Set(hashesMods)));
       message.textContent = "";
+      const contexte = contexteBuild();
 
       // 1. Les pièces candidates pour chaque emplacement
       const candidats = [];
@@ -766,12 +1074,12 @@
       }
 
       explorer(0, new Array(nbStats).fill(0), 0, 0, 0);
-      afficherResultats(meilleurs, interrompu, bonusChoisi);
+      afficherResultats(meilleurs, interrompu, bonusChoisi, contexte);
     }
 
     // ---------- L'affichage des résultats ----------
 
-    function afficherResultats(meilleurs, interrompu, bonusChoisi) {
+    function afficherResultats(meilleurs, interrompu, bonusChoisi, contexte) {
       if (meilleurs.length === 0) {
         message.textContent = interrompu
           ? "Recherche interrompue : trop de combinaisons. Ajoute des minimums pour la réduire."
@@ -828,6 +1136,38 @@
           bloc.appendChild(ligne);
         }
 
+        const armes = contexte.armes || [];
+        if (armes.length) {
+          const titreArmes = document.createElement("p");
+          titreArmes.className = "build-stats-title";
+          titreArmes.textContent = "Armes";
+          bloc.appendChild(titreArmes);
+          for (const arme of armes) {
+            const ligne = document.createElement("div");
+            ligne.className = "piece";
+            const image = document.createElement("img");
+            image.src = "https://www.bungie.net" + arme.icone;
+            const texte = document.createElement("span");
+            texte.textContent = arme.emplacement + " : " + arme.nom + " · " + arme.lieu;
+            ligne.append(image, texte);
+            bloc.appendChild(ligne);
+          }
+        }
+        if (contexte.doctrine) {
+          const doctrine = document.createElement("p");
+          doctrine.className = "bonus-result";
+          doctrine.textContent = "Doctrine prévue : " + contexte.doctrine.nom +
+            (contexte.doctrine.plugs.length ? " · " + contexte.doctrine.plugs.map(function (plug) { return plug.nom; }).join(" / ") : "");
+          bloc.appendChild(doctrine);
+        }
+        if (contexte.artefact) {
+          const artefact = document.createElement("p");
+          artefact.className = "bonus-result";
+          artefact.textContent = contexte.artefact.nom + " : " +
+            (contexte.artefact.perks.length ? contexte.artefact.perks.map(function (perk) { return perk.nom; }).join(" / ") : "aucun mod sélectionné");
+          bloc.appendChild(artefact);
+        }
+
         // Afficher les six valeurs même si une définition de nom manque.
         const nomsStatsSecours = ["Mobilité", "Résistance", "Récupération", "Discipline", "Intellect", "Force"];
         const totaux = resultat.totaux || STATS_ARMURE.map(function (_, k) {
@@ -879,6 +1219,11 @@
           sauvegardes.push({
             nom: nom.trim(),
             pieces: resultat.choix.map(function (c) { return Object.assign({}, c.piece, { mods: c.modPlan || [] }); }),
+            characterId: contexte.characterId,
+            classe: contexte.classe,
+            armes: contexte.armes,
+            doctrine: contexte.doctrine,
+            artefact: contexte.artefact,
             bonus: bonusChoisi ? {
               setHash: bonusChoisi.setHash,
               requiredCount: bonusChoisi.requiredCount,
@@ -929,19 +1274,17 @@
         statut.textContent = "Chargement de ton inventaire...";
         const profil = await appelerBungie(
           "/Destiny2/" + compte.membershipType + "/Profile/" + compte.membershipId +
-          "/?components=102,201,205,304"
+          "/?components=102,104,200,201,202,205,304"
         );
+        profilActif = profil;
 
         const statsObjets =
           (profil.itemComponents && profil.itemComponents.stats && profil.itemComponents.stats.data) || {};
 
         const objets = [];
-        function ajouter(liste, lieu) {
+        function ajouter(liste, lieu, idPersonnage) {
           for (const objet of liste) {
-            // Pour le coffre, l'emplacement réel vient de la définition de l'objet;
-            // le bucket de profil peut différer de celui utilisé par un personnage.
-            if (lieu !== "Coffre" && !EMPLACEMENTS_ARMURE[objet.bucketHash]) continue;
-            objets.push({ objet: objet, lieu: lieu });
+            objets.push({ objet: objet, lieu: lieu, idPersonnage: idPersonnage || null });
           }
         }
         if (profil.profileInventory && profil.profileInventory.data) {
@@ -949,12 +1292,12 @@
         }
         if (profil.characterInventories && profil.characterInventories.data) {
           for (const id in profil.characterInventories.data) {
-            ajouter(profil.characterInventories.data[id].items, "Inventaire d'un personnage");
+            ajouter(profil.characterInventories.data[id].items, "Inventaire", id);
           }
         }
         if (profil.characterEquipment && profil.characterEquipment.data) {
           for (const id in profil.characterEquipment.data) {
-            ajouter(profil.characterEquipment.data[id].items, "Équipée");
+            ajouter(profil.characterEquipment.data[id].items, "Équipée", id);
           }
         }
 
@@ -970,9 +1313,33 @@
         definitionsStats = definitions.stats;
         definitionsSets = definitions.sets;
         definitionsPerks = definitions.perks;
+        definitionsLite = definitions.objetsLite || {};
+        definitionsArtefacts = definitions.artefacts || {};
 
         for (const element of objets) {
-          const definition = definitions.objets[element.objet.itemHash];
+          const definition = definitions.objets[element.objet.itemHash] || definitionsLite[element.objet.itemHash];
+          const bucket = Number(definition && definition.inventory && definition.inventory.bucketTypeHash) || Number(element.objet.bucketHash);
+          const slotArme = BUCKETS_ARMES[bucket];
+          if (slotArme && element.objet.itemInstanceId) {
+            const personnageSource = profil.characters && profil.characters.data && profil.characters.data[element.idPersonnage];
+            const classeSource = personnageSource ? CLASSES[personnageSource.classType] : "";
+            const lieuLabel = element.lieu === "Coffre"
+              ? "Coffre"
+              : element.lieu === "Équipée"
+                ? "Équipée" + (classeSource ? " sur " + classeSource : "")
+                : "Inventaire" + (classeSource ? " de " + classeSource : "");
+            toutesLesArmes.push({
+              nom: definition.displayProperties && definition.displayProperties.name || "Arme inconnue",
+              icone: definition.displayProperties && definition.displayProperties.icon || "",
+              hash: Number(element.objet.itemHash),
+              idInstance: element.objet.itemInstanceId,
+              bucketHash: bucket,
+              classe: definition.classType,
+              lieu: element.lieu,
+              lieuLabel: lieuLabel,
+              idPersonnage: element.idPersonnage
+            });
+          }
           if (!definition || definition.itemType !== 2 || !definition.inventory) {
             continue;
           }
@@ -1003,9 +1370,11 @@
         construireTableau();
         majExotiques();
         majBonus();
+        remplirPersonnages();
         formulaire.style.display = "grid";
         const armuresCoffre = toutesLesArmures.filter(function (a) { return a.lieu === "Coffre"; }).length;
-        statut.textContent = toutesLesArmures.length + " armures prêtes, dont " + armuresCoffre + " dans le coffre. Ajuste les priorités, le bonus ou l’exotique puis lance la recherche.";
+        const nombreArmes = toutesLesArmes.length;
+        statut.textContent = toutesLesArmures.length + " armures prêtes (" + armuresCoffre + " au coffre) et " + nombreArmes + " armes disponibles. Choisis ton Gardien et complète les éléments du build.";
       } catch (erreur) {
         statut.textContent = "Erreur : " + erreur.message;
       }
