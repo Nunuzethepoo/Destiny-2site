@@ -2,10 +2,8 @@
   const links = [
     ["index.html", "Accueil"],
     ["generateur.html", "Builds"],
-    ["profil.html", "Personnages"],
-    ["armures.html", "Armures"],
-    ["equiper.html", "Équiper"],
-    ["mods.html", "Mods"]
+    ["arsenal.html", "Arsenal"],
+    ["equiper.html", "Équiper"]
   ];
   const current = location.pathname.split("/").pop() || "index.html";
   const header = document.createElement("header");

@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Arsenal du Gardien — VIGIE</title>
+  <link rel="stylesheet" href="vigie.css">
+  <script src="vigie-shell.js" defer></script>
+  <style>
+    .arsenal-intro{max-width:760px;color:var(--muted);line-height:1.65}
+    .guardians{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin:18px 0 24px}
+    .guardian{padding:14px;border:1px solid var(--line);border-radius:4px;background:linear-gradient(145deg,#141d27,#10161e)}
+    .guardian strong{display:block;color:var(--gold);font:700 20px 'Barlow Condensed';text-transform:uppercase}
+    .guardian span{color:var(--muted);font-size:11px}
+    .filters{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin:18px 0;padding:15px;border:1px solid var(--line);border-radius:4px;background:#111821}
+    .filters label{display:grid;gap:6px;color:#aeb9c5;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+    .filters input,.filters select{width:100%;min-width:0;min-height:39px;padding:9px 10px;border:1px solid #344353;border-radius:3px;background:#0c1219;color:#f1f4f7;font:12px 'DM Sans',sans-serif}
+    .inventory-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:22px 0 10px}
+    .inventory-heading h2{margin:0;color:var(--gold);font:700 22px 'Barlow Condensed';text-transform:uppercase}
+    .inventory-heading span{color:var(--muted);font-size:11px}
+    #objets{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:9px;margin-bottom:28px}
+    .item-card{display:flex;align-items:center;gap:11px;min-width:0;padding:10px;border:1px solid var(--line);border-radius:3px;background:#111820}
+    .item-card img{width:48px;height:48px;flex:0 0 48px;object-fit:cover;border:1px solid #394755;border-radius:2px;background:#090d12}
+    .item-info{min-width:0}
+    .item-name{display:block;color:#e6ebef;font-size:12px;font-weight:700;line-height:1.35;overflow-wrap:anywhere}
+    .item-meta{display:block;margin-top:4px;color:#9eabb8;font-size:10px;line-height:1.45}
+    .exotic{color:#d5a6ff}
+    .empty{grid-column:1/-1;padding:22px;border:1px dashed #344251;color:var(--muted);text-align:center;font-size:12px}
+    @media(max-width:760px){.filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:430px){.filters{grid-template-columns:1fr}.inventory-heading{align-items:flex-start;flex-direction:column}}
+  </style>
+</head>
+<body>
+  <h1>Arsenal du Gardien</h1>
+  <p class="arsenal-intro">Tes personnages, leurs équipements, tes armures et tes armes du coffre sont réunis ici. Utilise les filtres pour retrouver une pièce rapidement.</p>
+  <p id="statut" role="status" aria-live="polite">Chargement de ton arsenal…</p>
+  <section id="personnages" class="guardians" aria-label="Mes personnages"></section>
+  <section class="filters" aria-label="Filtres d’inventaire">
+    <label>Personnage<select id="filtrePersonnage"><option value="">Tous</option></select></label>
+    <label>Équipement<select id="filtreType"><option value="">Armures et armes</option><option value="armure">Armures</option><option value="arme">Armes</option></select></label>
+    <label>Emplacement<select id="filtreLieu"><option value="">Tous les lieux</option><option value="Coffre">Coffre</option><option value="Inventaire">Inventaire du personnage</option><option value="Équipée">Équipement porté</option></select></label>
+    <label>Recherche<input id="recherche" type="search" placeholder="Nom d’une pièce…"></label>
+  </section>
+  <div class="inventory-heading"><h2>Équipement disponible</h2><span id="compteur"></span></div>
+  <section id="objets" aria-live="polite"></section>
+  <p><a href="generateur.html">Ouvrir le générateur de builds</a> · <a href="equiper.html">Équiper un build</a></p>
+
+  <script src="bungie-api.js"></script>
+  <script>
+    const jeton = sessionStorage.getItem("jeton");
+    const statut = document.getElementById("statut");
+    const zoneGardiens = document.getElementById("personnages");
+    const zoneObjets = document.getElementById("objets");
+    const filtrePersonnage = document.getElementById("filtrePersonnage");
+    const filtreType = document.getElementById("filtreType");
+    const filtreLieu = document.getElementById("filtreLieu");
+    const recherche = document.getElementById("recherche");
+    const CLASSES = { 0: "Titan", 1: "Chasseur", 2: "Arcaniste" };
+    const SLOTS_ARMURE = { 3448274439:"Casque", 3551918588:"Gants", 14239492:"Torse", 20886954:"Jambes", 1585787867:"Objet de classe" };
+    const SLOTS_ARME = { 1498876634:"Arme cinétique", 2465295065:"Arme énergétique", 953998645:"Arme lourde" };
+    let tousLesObjets = [];
+    const nomsPersonnages = {};
+
+    async function appelerBungie(chemin) {
+      const reponse = await VIGIE_BUNGIE.fetchApi(chemin, { headers: { Authorization: "Bearer " + jeton } });
+      const donnees = await reponse.json();
+      if (donnees.ErrorStatus !== "Success") throw new Error(donnees.ErrorStatus + " - " + donnees.Message);
+      return donnees.Response;
+    }
+
+    function afficher() {
+      const type = filtreType.value;
+      const lieu = filtreLieu.value;
+      const perso = filtrePersonnage.value;
+      const terme = recherche.value.trim().toLocaleLowerCase("fr");
+      const visibles = tousLesObjets.filter(function (objet) {
+        return (!type || objet.type === type) && (!lieu || objet.lieu === lieu) &&
+          (!perso || objet.characterId === perso || objet.lieu === "Coffre") &&
+          (!terme || objet.nom.toLocaleLowerCase("fr").includes(terme));
+      });
+      document.getElementById("compteur").textContent = visibles.length + " pièce(s)";
+      zoneObjets.replaceChildren();
+      if (!visibles.length) {
+        const vide = document.createElement("p");
+        vide.className = "empty";
+        vide.textContent = "Aucune arme ou armure ne correspond à ces filtres.";
+        zoneObjets.appendChild(vide);
+        return;
+      }
+      visibles.forEach(function (objet) {
+        const carte = document.createElement("article");
+        carte.className = "item-card";
+        const image = document.createElement("img");
+        image.loading = "lazy";
+        image.src = objet.icone ? "https://www.bungie.net" + objet.icone : "";
+        image.alt = "";
+        const info = document.createElement("div");
+        info.className = "item-info";
+        const nom = document.createElement("span");
+        nom.className = "item-name" + (objet.exotique ? " exotic" : "");
+        nom.textContent = objet.nom + (objet.exotique ? " · Exotique" : "");
+        const meta = document.createElement("span");
+        meta.className = "item-meta";
+        const gardien = objet.characterId ? " · " + (nomsPersonnages[objet.characterId] || "Personnage") : "";
+        meta.textContent = objet.slot + " · " + objet.lieu + gardien;
+        info.append(nom, meta);
+        carte.append(image, info);
+        zoneObjets.appendChild(carte);
+      });
+    }
+
+    [filtrePersonnage, filtreType, filtreLieu].forEach(function (filtre) { filtre.addEventListener("change", afficher); });
+    recherche.addEventListener("input", afficher);
+
+    async function charger() {
+      if (!jeton) { statut.textContent = "Tu n’es pas connecté : connecte-toi avec Bungie pour charger ton arsenal."; return; }
+      try {
+        let memberships;
+        try { memberships = await appelerBungie("/User/GetMembershipsForCurrentUser/"); }
+        catch (_) { memberships = await appelerBungie("/User/GetMembershipsById/" + sessionStorage.getItem("membershipId") + "/-1/"); }
+        const compte = memberships.destinyMemberships.find(function (m) { return m.membershipId === memberships.primaryMembershipId; }) || memberships.destinyMemberships[0];
+        const profil = await appelerBungie("/Destiny2/" + compte.membershipType + "/Profile/" + compte.membershipId + "/?components=102,200,201,205");
+        const manifest = await appelerBungie("/Destiny2/Manifest/");
+        const chemin = manifest.jsonWorldComponentContentPaths.fr.DestinyInventoryItemLiteDefinition || manifest.jsonWorldComponentContentPaths.fr.DestinyInventoryItemDefinition;
+        const repManifest = await VIGIE_BUNGIE.fetchPublic(chemin);
+        if (!repManifest.ok) throw new Error("Impossible de charger les définitions d’objets Bungie.");
+        const definitions = await repManifest.json();
+        const persos = profil.characters && profil.characters.data || {};
+        for (const id in persos) {
+          const perso = persos[id];
+          const nom = CLASSES[perso.classType] + " · Puissance " + perso.light;
+          nomsPersonnages[id] = nom;
+          const option = document.createElement("option");
+          option.value = id;
+          option.textContent = nom;
+          filtrePersonnage.appendChild(option);
+          const carte = document.createElement("article");
+          carte.className = "guardian";
+          const titre = document.createElement("strong");
+          titre.textContent = CLASSES[perso.classType] || "Gardien";
+          const detail = document.createElement("span");
+          detail.textContent = "Puissance " + perso.light;
+          carte.append(titre, detail);
+          zoneGardiens.appendChild(carte);
+        }
+
+        const items = [];
+        function ajouter(liste, lieu, characterId) {
+          (liste || []).forEach(function (item) { items.push({ item:item, lieu:lieu, characterId:characterId || "" }); });
+        }
+        ajouter(profil.profileInventory && profil.profileInventory.data && profil.profileInventory.data.items, "Coffre", "");
+        const inventaires = profil.characterInventories && profil.characterInventories.data || {};
+        const equipements = profil.characterEquipment && profil.characterEquipment.data || {};
+        for (const id in persos) {
+          ajouter(inventaires[id] && inventaires[id].items, "Inventaire", id);
+          ajouter(equipements[id] && equipements[id].items, "Équipée", id);
+        }
+
+        const vus = new Set();
+        items.forEach(function (element) {
+          const hash = Number(element.item.itemHash);
+          const definition = definitions[hash];
+          if (!definition || !definition.inventory) return;
+          const bucket = Number(definition.inventory.bucketTypeHash);
+          const type = SLOTS_ARMURE[bucket] ? "armure" : (Number(definition.itemType) === 3 || SLOTS_ARME[bucket] ? "arme" : "");
+          if (!type) return;
+          const idUnique = element.item.itemInstanceId || [hash, element.lieu, element.characterId].join(":");
+          if (vus.has(String(idUnique))) return;
+          vus.add(String(idUnique));
+          tousLesObjets.push({
+            hash:hash,
+            idInstance:element.item.itemInstanceId || "",
+            nom:definition.displayProperties && definition.displayProperties.name || "Objet inconnu",
+            icone:definition.displayProperties && definition.displayProperties.icon || "",
+            type:type,
+            slot:SLOTS_ARMURE[bucket] || SLOTS_ARME[bucket] || (type === "arme" ? "Arme" : "Armure"),
+            exotique:Number(definition.inventory.tierType) === 6,
+            lieu:element.lieu,
+            characterId:element.characterId
+          });
+        });
+        const coffres = tousLesObjets.filter(function (objet) { return objet.lieu === "Coffre"; }).length;
+        statut.textContent = "Connecté : " + compte.bungieGlobalDisplayName + " · " + tousLesObjets.length + " armes et armures chargées, dont " + coffres + " dans le coffre.";
+        afficher();
+      } catch (erreur) {
+        statut.textContent = "Erreur de chargement : " + erreur.message;
+      }
+    }
+    charger();
+  </script>
+</body>
+</html>
