@@ -33,6 +33,7 @@
     .perk-icons{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
     .perk-icon{width:32px;height:32px;padding:1px!important;border:1px solid #3d4b59!important;border-radius:2px!important;background:#0a1016!important;cursor:pointer}
     .perk-icon:hover{border-color:var(--gold)!important}
+    .perk-icon.inactive-perk{opacity:.42;filter:grayscale(1)}
     .perk-icon img{display:block;width:28px;height:28px;object-fit:cover;border:0;border-radius:1px}
     .perk-icon.no-icon{width:auto;min-width:32px;padding:2px 5px!important;color:var(--gold)!important;font-size:9px!important}
     .empty{grid-column:1/-1;padding:22px;border:1px dashed #344251;color:var(--muted);text-align:center;font-size:12px}
@@ -81,6 +82,7 @@
     let socketsCharges = false;
     let chargementSockets = null;
     let socketsParObjet = {};
+    let perksParObjet = {};
     let definitionsObjets = {};
     let perksArmesCharges = false;
     const cacheDefinitions = new Map();
@@ -176,8 +178,8 @@
             objet.perks.forEach(function (perk) {
               const icone = document.createElement("button");
               icone.type = "button";
-              icone.className = "perk-icon" + (perk.icone ? "" : " no-icon");
-              icone.title = perk.nom;
+              icone.className = "perk-icon" + (perk.icone ? "" : " no-icon") + (perk.actif === false ? " inactive-perk" : "");
+              icone.title = perk.nom + (perk.actif === false ? " · Inactif" : "");
               icone.setAttribute("aria-label", "Filtrer par perk : " + perk.nom);
               if (perk.icone) {
                 const imagePerk = document.createElement("img");
@@ -298,8 +300,9 @@
     async function chargerSockets() {
       if (socketsCharges) return;
       if (!chargementSockets) {
-        chargementSockets = appelerBungie("/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=305").then(function (profil) {
+        chargementSockets = appelerBungie("/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=302,305").then(function (profil) {
           socketsParObjet = profil.itemComponents && profil.itemComponents.sockets && profil.itemComponents.sockets.data || {};
+          perksParObjet = profil.itemComponents && profil.itemComponents.perks && profil.itemComponents.perks.data || {};
           socketsCharges = true;
         }).finally(function () { chargementSockets = null; });
       }
@@ -307,6 +310,14 @@
     }
 
     function perksActifsPourObjet(objet) {
+      const references = perksParObjet[objet.idInstance] && perksParObjet[objet.idInstance].perks || [];
+      const perksVisibles = references.filter(function (reference) { return reference && reference.perkHash && reference.visible !== false; }).map(function (reference) {
+        const hash = Number(reference.perkHash);
+        const definition = cacheDefinitions.get("perk:" + hash);
+        const props = definition && definition.displayProperties || {};
+        return { nom: props.name || "Perk " + hash, icone: reference.iconPath || props.icon || "", description: props.description || "", actif: reference.isActive !== false, hash: hash };
+      });
+      if (perksVisibles.length) return perksVisibles;
       const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
       const vus = new Set();
       return etats.filter(function (socket) { return socket && socket.plugHash && socket.isEnabled !== false; }).map(function (socket) {
@@ -323,8 +334,11 @@
 
     async function chargerDefinitionsPerksArmes() {
       const hashs = new Set();
+      const hashsPerks = new Set();
       for (const objet of tousLesObjets) {
         if (objet.type !== "arme" || !objet.idInstance) continue;
+        const references = perksParObjet[objet.idInstance] && perksParObjet[objet.idInstance].perks || [];
+        references.forEach(function (reference) { if (reference && reference.perkHash && reference.visible !== false) hashsPerks.add(Number(reference.perkHash)); });
         const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
         etats.forEach(function (socket) {
           if (socket && socket.plugHash && socket.isEnabled !== false) hashs.add(Number(socket.plugHash));
@@ -332,6 +346,9 @@
       }
       let cache = {};
       try { cache = JSON.parse(localStorage.getItem("vigiePerkDefsCache") || "{}"); } catch (_) {}
+      for (const hash of hashsPerks) {
+        if (!cacheDefinitions.has("perk:" + hash) && cache["perk:" + hash]) cacheDefinitions.set("perk:" + hash, cache["perk:" + hash]);
+      }
       const manquants = Array.from(hashs).filter(function (hash) {
         return !cacheDefinitions.has(hash) && !cache[hash];
       });
@@ -356,11 +373,26 @@
         }
       }
       await Promise.all(Array.from({ length: Math.min(4, manquants.length) }, worker));
+      let prochainPerk = 0;
+      const perksManquants = Array.from(hashsPerks).filter(function (hash) { return !cacheDefinitions.has("perk:" + hash); });
+      async function workerPerks() {
+        while (prochainPerk < perksManquants.length) {
+          const hash = perksManquants[prochainPerk++];
+          try {
+            const definition = await appelerBungie("/Destiny2/Manifest/DestinySandboxPerkDefinition/" + hash + "/");
+            const compacte = { displayProperties: { name: definition.displayProperties && definition.displayProperties.name, icon: definition.displayProperties && definition.displayProperties.icon, description: definition.displayProperties && definition.displayProperties.description } };
+            cacheDefinitions.set("perk:" + hash, compacte);
+            cache["perk:" + hash] = compacte;
+          } catch (_) { cacheDefinitions.set("perk:" + hash, null); }
+          await new Promise(function (resolve) { setTimeout(resolve, 80); });
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(4, perksManquants.length) }, workerPerks));
       try { localStorage.setItem("vigiePerkDefsCache", JSON.stringify(cache)); } catch (_) {}
       for (const hash of hashs) {
         if (!cacheDefinitions.has(hash) && cache[hash]) cacheDefinitions.set(Number(hash), cache[hash]);
       }
-      return hashs.size;
+      return hashs.size + hashsPerks.size;
     }
 
     async function indexerPerksArmes() {
@@ -373,7 +405,7 @@
         perksArmesCharges = true;
         afficher();
         const armesAvecPerks = tousLesObjets.filter(function (objet) { return objet.type === "arme" && objet.perks.length; }).length;
-        statut.textContent = "Perks chargés pour " + armesAvecPerks + " arme(s) · " + nombrePlugs + " plugs actifs analysés. Clique sur une icône ou recherche un perk.";
+        statut.textContent = "Perks Bungie chargés pour " + armesAvecPerks + " arme(s) · " + nombrePlugs + " perks et plugs analysés. Clique sur une icône ou recherche un perk.";
       } catch (erreur) {
         statut.textContent = "Arsenal chargé, mais les perks des armes sont indisponibles : " + erreur.message;
       }
@@ -382,6 +414,17 @@
     async function afficherPerks(objet, conteneur) {
       if (!objet.idInstance) throw new Error("Cet objet ne possède pas de sockets individuels.");
       await chargerSockets();
+      if (objet.perks && objet.perks.length) {
+        conteneur.replaceChildren();
+        const titrePerks = document.createElement("strong");
+        titrePerks.textContent = "Perks d’origine : ";
+        conteneur.appendChild(titrePerks);
+        objet.perks.forEach(function (perk, index) {
+          if (index) conteneur.appendChild(document.createTextNode(" · "));
+          conteneur.appendChild(document.createTextNode(perk.nom + (perk.actif === false ? " (inactif)" : "") + (perk.description ? " — " + perk.description : "")));
+        });
+        return;
+      }
       const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
       const hashs = Array.from(new Set(etats.filter(function (socket) { return socket && socket.plugHash && socket.isEnabled !== false; }).map(function (socket) { return Number(socket.plugHash); })));
       const details = [];
