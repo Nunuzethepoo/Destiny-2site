@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0a0d12">
+  <title>Connexion Bungie — VIGIE</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=DM+Sans:wght@400;600;700&display=swap');
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(ellipse at 75% 0,#1b2b35,transparent 45%),#0a0d12;color:#f3f5f7;font:14px 'DM Sans',sans-serif}.panel{max-width:560px;width:100%;padding:30px;background:#111720;border:1px solid #26313e;border-radius:5px}.brand{color:#e6bb72;font:700 12px 'DM Sans';letter-spacing:3px}.sigil{font-size:28px;color:#e6bb72;margin:15px 0 4px}h1{font:700 38px/.95 'Barlow Condensed';margin:0 0 14px;text-transform:uppercase}p{color:#aab5c2;line-height:1.65;font-size:13px}.field{margin:18px 0}.field label{display:block;color:#8b98a8;font-size:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:7px}.field input{width:100%;padding:12px;color:#f3f5f7;background:#0a0d12;border:1px solid #344150;border-radius:3px;outline:none}.field input:focus{border-color:#e6bb72}.buttons{display:flex;gap:9px;flex-wrap:wrap;margin:18px 0}.btn{padding:12px 16px;border:1px solid #394654;background:#151e29;color:#f3f5f7;border-radius:3px;cursor:pointer;font-weight:700}.btn.primary{background:#e6bb72;color:#151515;border:0}.btn:hover{filter:brightness(1.1)}#status{min-height:24px;color:#8bd8dc;font-size:12px}.links{border-top:1px solid #26313e;margin-top:20px;padding-top:16px}.links a{color:#e6bb72;text-decoration:none;margin-right:14px;font-size:12px}
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <div class="brand">VIGIE · ARSENAL DU GARDIEN</div>
+    <div class="sigil">✦</div>
+    <h1>Connecter Bungie</h1>
+    <p>Le Worker relaie les appels Bungie sans exposer ta clé API dans les pages du site. Colle ici l’adresse Cloudflare qui se termine par <code>workers.dev</code>, puis connecte-toi sur le site officiel de Bungie.</p>
+    <div class="field"><label for="workerUrl">URL du relais Cloudflare</label><input id="workerUrl" type="url" placeholder="https://vigie.ton-compte.workers.dev" autocomplete="url"></div>
+    <div class="buttons"><button class="btn primary" id="connect">Connecter mon compte</button><button class="btn" id="disconnect">Se déconnecter</button></div>
+    <div id="status" role="status" aria-live="polite"></div>
+    <div class="links"><a href="index.html">Accueil</a><a href="profil.html">Mon profil</a></div>
+  </main>
+  <script src="bungie-api.js"></script>
+  <script>
+    const CLIENT_ID = "56958";
+    const workerInput = document.getElementById("workerUrl");
+    const status = document.getElementById("status");
+    workerInput.value = localStorage.getItem("vigieWorkerUrl") || "";
+    const redirectUri = location.origin + location.pathname;
+
+    document.getElementById("connect").addEventListener("click", () => {
+      try {
+        VIGIE_BUNGIE.setWorkerUrl(workerInput.value);
+        const state = crypto.randomUUID();
+        sessionStorage.setItem("etatOAuth", state);
+        const authorize = new URL("https://www.bungie.net/en/oauth/authorize");
+        authorize.searchParams.set("client_id", CLIENT_ID);
+        authorize.searchParams.set("response_type", "code");
+        authorize.searchParams.set("state", state);
+        location.assign(authorize.toString());
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    });
+
+    document.getElementById("disconnect").addEventListener("click", () => {
+      sessionStorage.removeItem("jeton");
+      sessionStorage.removeItem("membershipId");
+      status.textContent = "Session déconnectée de ce navigateur.";
+    });
+
+    async function finishOAuth() {
+      const params = new URLSearchParams(location.search);
+      const code = params.get("code");
+      const returnedState = params.get("state");
+      if (!code) {
+        status.textContent = sessionStorage.getItem("jeton") ? "Compte Bungie connecté dans cet onglet." : "Prêt à te connecter.";
+        return;
+      }
+      if (!returnedState || returnedState !== sessionStorage.getItem("etatOAuth")) {
+        status.textContent = "Connexion refusée : la vérification de sécurité a échoué.";
+        return;
+      }
+      history.replaceState({}, "", redirectUri);
+      sessionStorage.removeItem("etatOAuth");
+      status.textContent = "Échange du code d’autorisation…";
+      try {
+        const token = await VIGIE_BUNGIE.exchangeCode(code, redirectUri);
+        sessionStorage.setItem("jeton", token.access_token);
+        if (token.membership_id) sessionStorage.setItem("membershipId", token.membership_id);
+        status.textContent = "Compte Bungie connecté. Tu peux ouvrir ton profil ou ton générateur de builds.";
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    }
+    finishOAuth();
+  </script>
+</body>
+</html>
