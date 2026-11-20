@@ -332,6 +332,28 @@
       }).filter(Boolean);
     }
 
+    async function chargerPerksIndividuelsManquants() {
+      const armesSansPerks = tousLesObjets.filter(function (objet) {
+        const entree = objet.idInstance && perksParObjet[objet.idInstance];
+        return objet.type === "arme" && objet.idInstance && !(entree && entree.perks && entree.perks.length);
+      });
+      let prochain = 0;
+      let erreurs = 0;
+      async function worker() {
+        while (prochain < armesSansPerks.length) {
+          const objet = armesSansPerks[prochain++];
+          try {
+            const detail = await appelerBungie("/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/Item/" + objet.idInstance + "/?components=302");
+            const donneesPerks = detail.perks && detail.perks.data;
+            if (donneesPerks && donneesPerks.perks && donneesPerks.perks.length) perksParObjet[objet.idInstance] = donneesPerks;
+          } catch (_) { erreurs++; }
+          await new Promise(function (resolve) { setTimeout(resolve, 100); });
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(4, armesSansPerks.length) }, worker));
+      return { demandes: armesSansPerks.length, erreurs: erreurs };
+    }
+
     async function chargerDefinitionsPerksArmes() {
       const hashs = new Set();
       const hashsPerks = new Set();
@@ -398,6 +420,7 @@
     async function indexerPerksArmes() {
       try {
         await chargerSockets();
+        const repliIndividuel = await chargerPerksIndividuelsManquants();
         const nombrePlugs = await chargerDefinitionsPerksArmes();
         tousLesObjets.filter(function (objet) { return objet.type === "arme"; }).forEach(function (objet) {
           objet.perks = perksActifsPourObjet(objet);
@@ -405,7 +428,7 @@
         perksArmesCharges = true;
         afficher();
         const armesAvecPerks = tousLesObjets.filter(function (objet) { return objet.type === "arme" && objet.perks.length; }).length;
-        statut.textContent = "Perks Bungie chargés pour " + armesAvecPerks + " arme(s) · " + nombrePlugs + " perks et plugs analysés. Clique sur une icône ou recherche un perk.";
+        statut.textContent = "Perks Bungie chargés pour " + armesAvecPerks + "/" + tousLesObjets.filter(function (objet) { return objet.type === "arme"; }).length + " armes · " + nombrePlugs + " perks/plugs analysés" + (repliIndividuel.demandes ? " · lecture détaillée " + (repliIndividuel.demandes - repliIndividuel.erreurs) + "/" + repliIndividuel.demandes : "") + ".";
       } catch (erreur) {
         statut.textContent = "Arsenal chargé, mais les perks des armes sont indisponibles : " + erreur.message;
       }
