@@ -335,13 +335,14 @@
       return resultat;
     }
 
-    async function chargerPerksIndividuelsManquants() {
-      const armesSansPerks = tousLesObjets.filter(function (objet) {
+    async function chargerPerksIndividuelsManquants(armes, progression) {
+      const armesSansPerks = armes.filter(function (objet) {
         const entree = objet.idInstance && perksParObjet[objet.idInstance];
         return objet.type === "arme" && objet.idInstance && !(entree && entree.perks && entree.perks.length);
       });
       let prochain = 0;
       let erreurs = 0;
+      let terminees = 0;
       async function worker() {
         while (prochain < armesSansPerks.length) {
           const objet = armesSansPerks[prochain++];
@@ -352,10 +353,12 @@
             const donneesSockets = detail.sockets && detail.sockets.data;
             if (donneesSockets && donneesSockets.sockets && donneesSockets.sockets.length) socketsParObjet[objet.idInstance] = donneesSockets;
           } catch (_) { erreurs++; }
-          await new Promise(function (resolve) { setTimeout(resolve, 100); });
+          terminees++;
+          if (progression && (terminees % 8 === 0 || terminees === armesSansPerks.length)) progression(terminees, armesSansPerks.length, erreurs);
         }
       }
-      await Promise.all(Array.from({ length: Math.min(4, armesSansPerks.length) }, worker));
+      if (progression && armesSansPerks.length) progression(0, armesSansPerks.length, 0);
+      await Promise.all(Array.from({ length: Math.min(8, armesSansPerks.length) }, worker));
       return { demandes: armesSansPerks.length, erreurs: erreurs };
     }
 
@@ -435,12 +438,21 @@
         armes.forEach(function (objet) { objet.perks = perksActifsPourObjet(objet); });
         perksArmesCharges = true;
         afficher();
-        statut.textContent = "Perks affichés · traduction des noms en cours en arrière-plan…";
-        chargerDefinitionsPerksArmes().then(function (nombrePlugs) {
+        statut.textContent = "Perks affichés · lecture détaillée des armes en cours…";
+        chargerPerksIndividuelsManquants(armes, function (terminees, total, erreurs) {
+          armes.forEach(function (objet) { objet.perks = perksActifsPourObjet(objet); });
+          afficher();
+          statut.textContent = "Lecture détaillée des perks : " + terminees + "/" + total + " armes" + (erreurs ? " · " + erreurs + " indisponible(s)" : "") + ".";
+        }).then(function (repliIndividuel) {
+          armes.forEach(function (objet) { objet.perks = perksActifsPourObjet(objet); });
+          afficher();
+          statut.textContent = "Perks affichés · traduction des noms en cours…";
+          return chargerDefinitionsPerksArmes();
+        }).then(function (nombrePlugs) {
           armes.forEach(function (objet) { objet.perks = perksActifsPourObjet(objet); });
           afficher();
           const armesAvecPerks = armes.filter(function (objet) { return objet.perks.length; }).length;
-          statut.textContent = "Perks chargés pour " + armesAvecPerks + "/" + armes.length + " armes · noms Bungie mis à jour (" + nombrePlugs + " définitions).";
+          statut.textContent = "Perks chargés pour " + armesAvecPerks + "/" + armes.length + " armes · " + repliIndividuel.demandes + " lecture(s) détaillée(s), " + nombrePlugs + " définitions.";
         }).catch(function (erreur) {
           statut.textContent = "Perks affichés ; certains noms n’ont pas pu être traduits : " + erreur.message;
         });
