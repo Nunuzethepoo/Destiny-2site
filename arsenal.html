@@ -312,29 +312,24 @@
     function perksActifsPourObjet(objet) {
       const references = perksParObjet[objet.idInstance] && perksParObjet[objet.idInstance].perks || [];
       const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
-      const socketsConnus = etats.filter(function (socket) { return socket && socket.plugHash; }).map(function (socket) {
-        const hash = Number(socket.plugHash);
-        const definition = cacheDefinitions.get(hash) || definitionsObjets[hash];
-        const props = definition && definition.displayProperties || {};
-        return { nom: props.name || "", icone: props.icon || "", description: props.description || "", hash: hash };
-      }).filter(function (perk) { return perk.nom; });
-      const resultat = references.filter(function (reference) { return reference && reference.perkHash && reference.visible !== false; }).map(function (reference) {
+      const resultat = references.filter(function (reference) { return reference && reference.perkHash; }).map(function (reference) {
         const hash = Number(reference.perkHash);
         const definition = cacheDefinitions.get("perk:" + hash);
         const props = definition && definition.displayProperties || {};
-        const icone = reference.iconPath || props.icon || "";
-        const socketCorrespondant = socketsConnus.find(function (perk) { return perk.icone && perk.icone === icone; });
-        return { nom: props.name || (socketCorrespondant && socketCorrespondant.nom) || "Perk", icone: icone || (socketCorrespondant && socketCorrespondant.icone) || "", description: props.description || (socketCorrespondant && socketCorrespondant.description) || "", actif: reference.isActive !== false, hash: hash };
+        return { nom: props.name || "Perk " + hash, icone: reference.iconPath || props.icon || "", description: props.description || "", actif: reference.isActive !== false, hash: hash };
       });
       const vus = new Set();
-      resultat.forEach(function (perk) { vus.add(String(perk.icone || perk.nom).toLocaleLowerCase("fr")); });
-      socketsConnus.forEach(function (perk) {
-        const definition = cacheDefinitions.get(perk.hash) || definitionsObjets[perk.hash];
+      resultat.forEach(function (perk) { vus.add(String(perk.hash || perk.nom).toLocaleLowerCase("fr")); });
+      etats.filter(function (socket) { return socket && socket.plugHash; }).forEach(function (socket) {
+        const hash = Number(socket.plugHash);
+        const definition = cacheDefinitions.get(hash) || definitionsObjets[hash];
+        const props = definition && definition.displayProperties || {};
         const categorie = definition && definition.plug && definition.plug.plugCategoryIdentifier || "";
-        if (/shader|ornament|transmat|emote/i.test(categorie)) return;
-        const cle = String(perk.icone || perk.nom).toLocaleLowerCase("fr");
+        if (!props.name || /shader|ornament|transmat|emote/i.test(categorie)) return;
+        const cle = String(hash || props.name).toLocaleLowerCase("fr");
         if (vus.has(cle)) return;
         vus.add(cle);
+        const perk = { nom: props.name, icone: props.icon || "", description: props.description || "", hash: hash };
         resultat.push(perk);
       });
       return resultat;
