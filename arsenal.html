@@ -495,8 +495,8 @@
         const manifest = await appelerBungie("/Destiny2/Manifest/");
         const cheminsManifest = manifest.jsonWorldComponentContentPaths.fr;
         const definitions = await chargerDefinitionsStatiques(
-          cheminsManifestActifs.DestinyInventoryItemLiteDefinition || cheminsManifestActifs.DestinyInventoryItemDefinition,
-          cheminsManifestActifs.DestinyInventoryItemDefinition
+          cheminsManifest.DestinyInventoryItemLiteDefinition || cheminsManifest.DestinyInventoryItemDefinition,
+          cheminsManifest.DestinyInventoryItemDefinition
         );
         definitionsObjets = definitions;
         const persos = profil.characters && profil.characters.data || {};
