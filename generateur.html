@@ -164,10 +164,20 @@
       }
 
       const stats = cache.stats || await lireFichier(chemins.DestinyStatDefinition);
+      // Le coffre regroupe plusieurs buckets de profil : bucketHash n'est pas
+      // toujours l'emplacement normal de l'objet. Le manifeste Lite permet de
+      // reconnaître les armures du coffre sans interroger chaque objet un par un.
+      const cheminLite = chemins.DestinyInventoryItemLiteDefinition || chemins.DestinyInventoryItemDefinition;
+      const objetsLite = await lireFichier(cheminLite);
+      const hashesArmureReels = hashesArmure.filter(function (hash) {
+        const definition = objetsLite[hash] || cache.objets[hash];
+        const bucket = definition && definition.inventory && definition.inventory.bucketTypeHash;
+        return Boolean(EMPLACEMENTS_ARMURE[bucket]);
+      });
       const objets = Object.assign({}, cache.objets);
       // Les définitions sont mises en cache en version compacte. Une ancienne entrée
       // sans marqueur est rechargée une fois pour récupérer les prises utiles aux mods.
-      const hashesArmureManquants = hashesArmure.filter(function (hash) { return !objets[hash] || !objets[hash]._vigieSocketsCached; });
+      const hashesArmureManquants = hashesArmureReels.filter(function (hash) { return !objets[hash] || !objets[hash]._vigieSocketsCached; });
       let prochain = 0;
       let charges = 0;
       const nombreWorkers = Math.min(4, hashesArmureManquants.length);
@@ -203,7 +213,7 @@
       }
 
       const sets = Object.assign({}, cache.sets);
-      const hashesSets = Array.from(new Set(hashesArmure.map(function (hash) {
+      const hashesSets = Array.from(new Set(hashesArmureReels.map(function (hash) {
         const definition = objets[hash];
         return Number(definition.equippingBlock && definition.equippingBlock.equipableItemSetHash) || 0;
       }).filter(Boolean)));
@@ -220,7 +230,7 @@
       const objetsEnCache = {};
       const setsEnCache = {};
       const perksEnCache = {};
-      hashesArmure.forEach(function (hash) {
+      hashesArmureReels.forEach(function (hash) {
         const definition = objets[hash];
         if (!definition) return;
         objetsEnCache[hash] = {
@@ -259,7 +269,7 @@
           stats: stats
         }));
       } catch (_) {}
-      return { objets: objets, stats: stats, sets: sets, perks: perks };
+      return { objets: objets, stats: stats, sets: sets, perks: perks, nombreArmures: hashesArmureReels.length };
     }
 
     function plugsPourSocket(socket, hashSet) {
@@ -896,9 +906,9 @@
         const objets = [];
         function ajouter(liste, lieu) {
           for (const objet of liste) {
-            // Ne charger que les cinq emplacements d'armure : le coffre contient
-            // aussi beaucoup d'objets sans rapport qui ralentissaient l'initialisation.
-            if (!EMPLACEMENTS_ARMURE[objet.bucketHash]) continue;
+            // Pour le coffre, l'emplacement réel vient de la définition de l'objet;
+            // le bucket de profil peut différer de celui utilisé par un personnage.
+            if (lieu !== "Coffre" && !EMPLACEMENTS_ARMURE[objet.bucketHash]) continue;
             objets.push({ objet: objet, lieu: lieu });
           }
         }
@@ -919,7 +929,7 @@
         const hashesArmure = Array.from(new Set(objets.map(function (element) {
           return element.objet.itemHash;
         }).filter(Boolean)));
-        statut.textContent = hashesArmure.length + " armures trouvées. Chargement des noms, bonus et statistiques…";
+        statut.textContent = "Analyse des objets du coffre et des armures des personnages…";
         const definitions = await chargerDefinitions(hashesArmure, function (phase, charge, total) {
           if (phase === "armures") statut.textContent = "Analyse des pièces d’armure : " + charge + " / " + total + "…";
           else if (phase === "sets") statut.textContent = "Lecture des bonus d’armure : " + charge + " / " + total + " sets…";
