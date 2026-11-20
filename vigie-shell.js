@@ -2,6 +2,7 @@
   const links = [
     ["generateur.html", "Builds"],
     ["collection.html", "Collection"],
+    ["raids.html", "Raids"],
     ["arsenal.html", "Arsenal"],
     ["equiper.html", "Équiper"]
   ];
