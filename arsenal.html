@@ -311,25 +311,27 @@
 
     function perksActifsPourObjet(objet) {
       const references = perksParObjet[objet.idInstance] && perksParObjet[objet.idInstance].perks || [];
-      const perksVisibles = references.filter(function (reference) { return reference && reference.perkHash && reference.visible !== false; }).map(function (reference) {
+      const resultat = references.filter(function (reference) { return reference && reference.perkHash && reference.visible !== false; }).map(function (reference) {
         const hash = Number(reference.perkHash);
         const definition = cacheDefinitions.get("perk:" + hash);
         const props = definition && definition.displayProperties || {};
         return { nom: props.name || "Perk " + hash, icone: reference.iconPath || props.icon || "", description: props.description || "", actif: reference.isActive !== false, hash: hash };
       });
-      if (perksVisibles.length) return perksVisibles;
       const etats = socketsParObjet[objet.idInstance] && socketsParObjet[objet.idInstance].sockets || [];
       const vus = new Set();
-      return etats.filter(function (socket) { return socket && socket.plugHash; }).map(function (socket) {
+      resultat.forEach(function (perk) { vus.add(String(perk.hash || perk.nom).toLocaleLowerCase("fr")); });
+      etats.filter(function (socket) { return socket && socket.plugHash; }).forEach(function (socket) {
         const hash = Number(socket.plugHash);
         const definition = cacheDefinitions.get(hash) || definitionsObjets[hash];
         const props = definition && definition.displayProperties || {};
         const categorie = definition && definition.plug && definition.plug.plugCategoryIdentifier || "";
-        if (!props.name || /shader|ornament|transmat|emote/i.test(categorie)) return null;
-        if (vus.has(props.name)) return null;
-        vus.add(props.name);
-        return { nom: props.name, icone: props.icon || "", description: props.description || "" };
-      }).filter(Boolean);
+        if (!props.name || /shader|ornament|transmat|emote/i.test(categorie)) return;
+        const cle = String(hash || props.name).toLocaleLowerCase("fr");
+        if (vus.has(cle)) return;
+        vus.add(cle);
+        resultat.push({ nom: props.name, icone: props.icon || "", description: props.description || "", hash: hash });
+      });
+      return resultat;
     }
 
     async function chargerPerksIndividuelsManquants() {
