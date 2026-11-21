@@ -179,6 +179,7 @@
     let plansDoctrine = {};
     let plansAptitudes = {};
     let definitionsDoctrine = {};
+    let definitionsPlugSetsDoctrine = {};
     let definitionsCategoriesSocket = {};
     let definitionsTypesSocket = {};
     let plugsReutilisablesDoctrine = {};
@@ -744,6 +745,15 @@
       return definition;
     }
 
+    async function definitionPlugSet(hash) {
+      if (!hash) return null;
+      if (Object.prototype.hasOwnProperty.call(definitionsPlugSetsDoctrine, hash)) return definitionsPlugSetsDoctrine[hash];
+      let definition = null;
+      try { definition = await appelerBungie("/Destiny2/Manifest/DestinyPlugSetDefinition/" + hash + "/"); } catch (_) {}
+      definitionsPlugSetsDoctrine[hash] = definition;
+      return definition;
+    }
+
     async function chargerAptitudesDoctrine() {
       const numero = ++requeteAptitudes;
       const idPersonnage = choixPersonnage.value;
@@ -766,6 +776,12 @@
 
         const sockets = definition && definition.sockets;
         const entrees = sockets && sockets.socketEntries || [];
+        const plugSetHashes = Array.from(new Set(entrees.reduce(function (hashes, entree) {
+          if (!entree) return hashes;
+          return hashes.concat([Number(entree.reusablePlugSetHash) || 0, Number(entree.randomizedPlugSetHash) || 0]);
+        }, []).filter(Boolean)));
+        await Promise.all(plugSetHashes.map(definitionPlugSet));
+        if (numero !== requeteAptitudes) return;
         const categories = sockets && sockets.socketCategories || [];
         const nomsCategories = await Promise.all(categories.map(async function (categorie) {
           const categorieDef = await definitionSocketCategory(Number(categorie.socketCategoryHash));
@@ -822,12 +838,23 @@
         for (let index = 0; index < entrees.length; index++) {
           const groupe = groupeIndex[index];
           const entree = entrees[index];
-          if (!groupe || !entree || entree.defaultVisible === false) continue;
+          if (!groupe || !entree) continue;
           const runtime = socketsActuelles[index] || {};
           const plugsInstance = Array.isArray(plugsReutilisables[index]) ? plugsReutilisables[index] : [];
           const source = Object.assign({}, runtime, { reusablePlugItems: (entree.reusablePlugItems || []).concat(plugsInstance) });
           let hashes = plugsPourSocket(source, entree.reusablePlugSetHash);
           if (entree.randomizedPlugSetHash) hashes = hashes.concat(plugsPourSocket(source, entree.randomizedPlugSetHash));
+          // Les prises déclarées dans le manifeste sont des choix possibles même
+          // quand Bungie ne les renvoie pas comme déverrouillées dans le profil.
+          hashes = hashes.concat((entree.reusablePlugItems || []).map(function (plug) {
+            return Number(plug && (plug.plugItemHash || plug.itemHash));
+          }));
+          [entree.reusablePlugSetHash, entree.randomizedPlugSetHash].filter(Boolean).forEach(function (hashSet) {
+            const definitionSet = definitionsPlugSetsDoctrine[hashSet];
+            hashes = hashes.concat((definitionSet && definitionSet.reusablePlugItems || []).map(function (plug) {
+              return Number(plug && (plug.plugItemHash || plug.itemHash));
+            }));
+          });
           if (entree.singleInitialItemHash) hashes.push(Number(entree.singleInitialItemHash));
           if (runtime.plugHash) hashes.push(Number(runtime.plugHash));
           hashes = Array.from(new Set(hashes.map(Number).filter(function (hash) { return hash && definitionsLite[hash]; })));
