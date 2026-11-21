@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#090d12">
+  <title>Partager un build — VIGIE</title>
+  <link rel="stylesheet" href="vigie.css">
+  <script src="vigie-shell.js" defer></script>
+  <style>
+    .share-intro{max-width:760px;color:var(--muted);font-size:12px;line-height:1.7}
+    .share-privacy{margin:14px 0 22px;padding:11px 13px;border:1px solid #8bd8dc35;background:#8bd8dc0a;color:#b8d9dc;font-size:10px;line-height:1.6}
+    .share-privacy strong{color:#d1f0f1}
+    .shared-build-card{margin:16px 0 22px;padding:clamp(12px,2vw,20px);border:1px solid #394653;border-top:2px solid var(--gold);border-radius:4px;background:linear-gradient(145deg,#18212b,#0d131a 68%);box-shadow:0 15px 32px #0004}
+    .shared-build-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid #ffffff15}
+    .shared-class-tag{display:inline-flex;padding:4px 7px;border:1px solid #c99f5b77;color:#e3c58e;font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+    .shared-build-head h2{margin:6px 0 0;color:#f1f4f7;font:700 clamp(21px,3vw,29px)/1.1 'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase}
+    .shared-subtitle{margin:4px 0 0;color:#97a5b2;font-size:10px}
+    .shared-power{flex:0 0 auto;padding:8px 10px;border:1px solid #c99f5b55;color:#e9d4aa;font:700 11px ui-monospace,monospace;white-space:nowrap}
+    .shared-equipment{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:7px;margin:13px 0}
+    .shared-gear-tile{min-width:0;padding:6px;border:1px solid #3b4652;background:linear-gradient(145deg,#1d2833,#0b1117)}
+    .shared-gear-tile.is-exotic{border-color:#d5a748;box-shadow:inset 0 0 0 1px #d5a74833}
+    .shared-gear-icon{display:grid;place-items:center;aspect-ratio:1;margin-bottom:5px;border:1px solid #485665;background:#090e13;color:#cfb37d;font-size:19px}
+    .shared-gear-icon img{display:block;width:100%;height:100%;object-fit:cover}
+    .shared-gear-slot{display:block;overflow:hidden;color:#8493a0;font-size:8px;font-weight:800;letter-spacing:.04em;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap}
+    .shared-gear-name{display:-webkit-box;min-height:27px;margin-top:2px;overflow:hidden;color:#e2e7eb;font-size:9px;line-height:1.35;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow-wrap:anywhere}
+    .shared-mod-list{display:grid;gap:3px;margin-top:5px}
+    .shared-mod-chip{overflow:hidden;padding:3px 4px;border:1px solid #8bd8dc24;background:#8bd8dc09;color:#a9cdd0;font-size:8px;line-height:1.25;text-overflow:ellipsis;white-space:nowrap}
+    .shared-stat-section{margin-top:8px;padding-top:9px;border-top:1px solid #ffffff14}
+    .shared-stat-section h3,.shared-info-panel h3{margin:0 0 8px;color:#9eabb7;font:700 10px 'DM Sans',sans-serif;letter-spacing:.1em;text-transform:uppercase}
+    .shared-stat-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+    .shared-stat-cell{display:grid;grid-template-columns:1fr auto;align-items:center;gap:1px 5px;padding:6px 8px;border:1px solid #27323e;background:#111820}
+    .shared-stat-cell span{overflow:hidden;color:#b4c2ce;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+    .shared-stat-cell strong{grid-row:span 2;color:var(--gold);font:700 17px ui-monospace,monospace}
+    .shared-stat-cell small{color:#718090;font-size:7px;letter-spacing:.06em}
+    .shared-build-lower{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(220px,.8fr);gap:8px;margin-top:9px}
+    .shared-info-panel{min-width:0;padding:10px;border:1px solid #344251;background:#0b1117}
+    .shared-doctrine-head{display:flex;align-items:center;gap:7px;margin-bottom:7px;color:#edf1f4;font-size:11px}
+    .shared-doctrine-head img{width:26px;height:26px;border:1px solid #596775;object-fit:cover}
+    .shared-abilities{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:5px}
+    .shared-ability{display:flex;align-items:center;gap:6px;min-width:0;padding:5px;border:1px solid #ffffff12;background:#121a22}
+    .shared-ability img{width:27px;height:27px;flex:0 0 27px;border:1px solid #46515e;object-fit:cover}
+    .shared-ability span{display:grid;min-width:0;gap:2px}
+    .shared-ability small{overflow:hidden;color:#82909d;font-size:7px;letter-spacing:.06em;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap}
+    .shared-ability strong{display:-webkit-box;overflow:hidden;color:#ced6dd;font-size:9px;line-height:1.3;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+    .shared-bonus-name{display:block;color:#d7bd8b;font-size:11px;line-height:1.5}
+    .shared-perks{display:grid;gap:4px;margin:7px 0 0;padding-left:15px;color:#aebbc7;font-size:9px;line-height:1.4}
+    .shared-empty-note,.shared-empty-card{margin:0;padding:9px;border:1px solid #ffffff12;background:#101720;color:#97a5b2;font-size:10px;line-height:1.6}
+    .shared-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:9px;border-top:1px solid #ffffff14}
+    .shared-copy-status{color:#9fd8d9;font-size:10px;line-height:1.5}
+    #partageMessage{display:none;margin:12px 0;padding:12px;border:1px solid #d6756844;background:#d675680d;color:#efaaa0;font-size:11px;line-height:1.6}
+    #partageMessage:not([hidden]){display:block}
+    @media(max-width:760px){.shared-equipment{grid-template-columns:repeat(4,minmax(0,1fr))}.shared-build-lower{grid-template-columns:1fr}}
+    @media(max-width:420px){.shared-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.shared-build-head{align-items:flex-start;flex-direction:column}.shared-power{align-self:flex-start}}
+  </style>
+</head>
+<body>
+  <h1>Partager un build</h1>
+  <p id="partageIntro" class="share-intro">Choisis un build sauvegardé pour créer un lien autonome. La personne qui l’ouvre verra l’équipement, les stats, les aptitudes et le bonus de set sur une seule fiche.</p>
+  <p class="share-privacy"><strong>À savoir :</strong> le lien contient une copie des choix du build pour pouvoir l’afficher sans connexion. Il ne contient pas ton identifiant Bungie ni les identifiants de tes objets. Toute personne qui reçoit le lien peut voir cette fiche.</p>
+  <p id="partageMessage" role="alert" hidden></p>
+  <section id="buildPartage" aria-label="Build reçu"></section>
+  <h2>Mes builds enregistrés</h2>
+  <section id="buildsLocaux" aria-label="Builds sauvegardés sur cet appareil"></section>
+  <p><a href="generateur.html">Créer un build</a> · <a href="equiper.html">Voir mes builds à équiper</a></p>
+  <script src="builds-partage.js"></script>
+  <script>VIGIE_PARTAGE.initialiser();</script>
+</body>
+</html>

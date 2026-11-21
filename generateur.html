@@ -1440,7 +1440,17 @@
           }
           sauvegardes.push({
             nom: nom.trim(),
-            pieces: resultat.choix.map(function (c) { return Object.assign({}, c.piece, { mods: c.modPlan || [] }); }),
+            pieces: resultat.choix.map(function (c) {
+              return Object.assign({}, c.piece, {
+                mods: (c.modPlan || []).map(function (mod) {
+                  const definitionMod = definitionMods[mod.plugItemHash];
+                  return Object.assign({}, mod, {
+                    nom: definitionMod && definitionMod.displayProperties && definitionMod.displayProperties.name || "Mod d’armure",
+                    icone: definitionMod && definitionMod.displayProperties && definitionMod.displayProperties.icon || ""
+                  });
+                })
+              });
+            }),
             characterId: contexteSauvegarde.characterId,
             classe: contexteSauvegarde.classe,
             characterName: contexteSauvegarde.characterName,

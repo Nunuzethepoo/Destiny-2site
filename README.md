@@ -1,6 +1,6 @@
 # VIGIE — Arsenal Destiny 2
 
-Site statique français pour consulter les Gardiens, rechercher des builds, sauvegarder des sets, déplacer/équiper des objets, consulter les rapports de raids et de donjons, et parcourir les membres de son clan Bungie. Les builds restent dans le stockage local du navigateur.
+Site statique français pour consulter les Gardiens, rechercher des builds, sauvegarder des sets, partager une fiche de build par lien, déplacer/équiper des objets, consulter les rapports de raids et de donjons, et parcourir les membres de son clan Bungie. Les builds restent dans le stockage local du navigateur ; un lien de partage transporte une copie des éléments choisis, sans identifiant de compte.
 
 ## Déploiement GitHub Pages
 
@@ -32,6 +32,7 @@ Un client Bungie public ne reçoit pas de jeton de renouvellement. Si sa session
 - `worker.js` — relais Cloudflare.
 - `vigie.css` et `vigie-shell.js` — thème commun et navigation des pages.
 - `generateur.html` — recherche de builds par priorités de stats, exotique et bonus d’armure à 2 ou 4 pièces.
+- `partager.html` et `builds-partage.js` — partage de builds par lien autonome et fiche publique récapitulative.
 - `collection.html` et `collection.js` — catalogue des armes Bungie et recherche des rolls PvE recommandés par la liste communautaire Aegis.
 - `raids.html` et `raids.js` — guides en français des raids, rôles, glossaire débutant, actions et erreurs à éviter, avec cartes communautaires ou captures réelles des salles créditées par rencontre.
 - `rapports.html` et `activity-reports.js` — historiques Raid Report et Donjon Report, avec rapports PGCR Bungie.
