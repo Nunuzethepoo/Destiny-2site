@@ -4,9 +4,45 @@
   <meta charset="UTF-8">
   <title>Équiper un set</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    pre { background: #101720; padding: 12px; white-space: pre-wrap; border: 1px solid #344251; border-radius: 3px; color: #d7e0e8; }
-    .set { display: grid; gap: 12px; margin: 14px 0; padding: 16px; border: 1px solid #344251; border-radius: 4px; background: #111820; }
+    body { font-family: 'DM Sans', sans-serif; padding: clamp(14px,3vw,30px); }
+    #statut { padding: 11px 14px; border-left: 3px solid var(--gold); background: #101720; color: #cbd4dc; font-size: 12px; }
+    .guardian-bar { display:flex; align-items:center; justify-content:space-between; gap:14px; margin:18px 0 24px; padding:14px 16px; border:1px solid #344251; background:linear-gradient(110deg,#18232e,#0d1319); }
+    .guardian-bar label { display:grid; gap:5px; color:#aebbc7; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .guardian-bar select { min-width:min(310px,70vw); min-height:40px; padding:8px 11px; border:1px solid #445261; background:#0a1016; color:#edf1f4; }
+    .loadout-card { display:grid; gap:15px; margin:16px 0; padding:clamp(14px,2vw,22px); border:1px solid #394653; border-top:2px solid #c99f5b; border-radius:4px; background:linear-gradient(145deg,#18212b,#0d131a 68%); box-shadow:0 15px 32px #0004; }
+    .loadout-header { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding-bottom:12px; border-bottom:1px solid #ffffff15; }
+    .loadout-title { display:flex; align-items:center; gap:9px; margin:0; color:#f0f3f5; font:700 24px 'Barlow Condensed',sans-serif; letter-spacing:.04em; text-transform:uppercase; }
+    .class-tag { padding:4px 7px; border:1px solid #c99f5b77; color:#e3c58e; font:700 9px 'DM Sans',sans-serif; letter-spacing:.1em; }
+    .loadout-subtitle { margin:5px 0 0; color:#97a5b2; font-size:11px; }
+    .power-badge { flex:0 0 auto; padding:8px 11px; border:1px solid #c99f5b55; color:#e9d4aa; font:700 14px ui-monospace,monospace; }
+    .loadout-gear { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,2fr); gap:16px; }
+    .gear-section h4,.loadout-panel h4 { margin:0 0 10px; color:#9eabb7; font:700 11px 'DM Sans',sans-serif; letter-spacing:.12em; text-transform:uppercase; }
+    .gear-row { display:grid; gap:8px; }
+    .gear-row.weapons { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .gear-row.armor { grid-template-columns:repeat(5,minmax(0,1fr)); }
+    .gear-tile { min-width:0; padding:7px; border:1px solid #3b4652; background:linear-gradient(145deg,#1d2833,#0b1117); }
+    .gear-tile.is-exotic { border-color:#d5a748; box-shadow:inset 0 0 0 1px #d5a74833; }
+    .gear-icon { display:grid; place-items:center; aspect-ratio:1; margin-bottom:7px; border:1px solid #485665; background:#090e13; }
+    .gear-icon img { display:block; width:100%; height:100%; object-fit:cover; }
+    .gear-icon .empty-slot { color:#576675; font:700 22px 'Barlow Condensed',sans-serif; }
+    .gear-slot-label { display:block; margin-bottom:3px; color:#8493a0; font-size:9px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+    .gear-name { display:-webkit-box; min-height:30px; overflow:hidden; color:#e2e7eb; font-size:10px; line-height:1.45; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+    .gear-location { display:block; margin-top:4px; color:#82909d; font-size:9px; }
+    .loadout-lower { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr); gap:14px; }
+    .loadout-panel { min-width:0; padding:12px; border:1px solid #344251; background:#0b1117; }
+    .stat-lines { display:grid; gap:8px; }
+    .stat-line { display:grid; grid-template-columns:minmax(78px,.7fr) minmax(60px,1fr) 26px; align-items:center; gap:8px; color:#b7c1ca; font-size:10px; }
+    .stat-track { height:5px; overflow:hidden; background:#ffffff12; }
+    .stat-fill { height:100%; background:linear-gradient(90deg,#9c7743,#e7c47d); }
+    .stat-value { color:#f0d59d; text-align:right; font:700 11px ui-monospace,monospace; }
+    .subclass-head { display:flex; align-items:center; gap:9px; margin-bottom:10px; color:#edf1f4; font-size:12px; font-weight:700; }
+    .subclass-head img { width:34px; height:34px; border:1px solid #596775; object-fit:cover; }
+    .ability-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:6px; }
+    .ability-item { display:flex; align-items:center; gap:7px; min-width:0; padding:6px; border:1px solid #ffffff12; background:#121a22; }
+    .ability-item img { width:30px; height:30px; flex:0 0 30px; border:1px solid #46515e; object-fit:cover; }
+    .ability-item span { min-width:0; color:#ced6dd; font-size:10px; line-height:1.35; }
+    .ability-item small { display:block; margin-bottom:2px; color:#82909d; font-size:8px; letter-spacing:.07em; text-transform:uppercase; }
+    .bonus-line { margin:10px 0 0; color:#d7bd8b; font-size:10px; line-height:1.55; }
     .set-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .set-actions button, .editor-actions button { min-height: 38px; padding: 8px 12px; border: 1px solid #b9975d; border-radius: 3px; background: #d4ad680d; color: #e3c58e; font-weight: 700; cursor: pointer; }
     .set-actions button:hover, .editor-actions button:hover { background: #d4ad6822; }
@@ -19,7 +55,8 @@
     .editor-actions .cancel-edit { border-color: #526170; color: #bdc8d2; }
     .set-summary { color: #d7e0e8; font-size: 13px; line-height: 1.6; }
     .set-details { color: #adbac6; font-size: 11px; }
-    @media(max-width: 520px) { body { padding: 14px; } }
+    @media(max-width: 760px) { .loadout-gear { grid-template-columns:1fr; } .loadout-lower { grid-template-columns:1fr; } }
+    @media(max-width: 540px) { .gear-row.armor { grid-template-columns:repeat(3,minmax(0,1fr)); } .gear-row.weapons { gap:5px; } .gear-tile { padding:5px; } .gear-name { font-size:9px; } .loadout-header { flex-direction:column; } .guardian-bar { align-items:stretch; flex-direction:column; } .guardian-bar select { min-width:0; } }
   </style>
   <link rel="stylesheet" href="vigie.css">
   <script src="vigie-shell.js" defer></script>
@@ -28,14 +65,12 @@
   <h1>Équiper un build</h1>
   <p id="statut">Chargement...</p>
 
-  <p>Personnage cible :
-    <select id="choixPersonnage"></select>
-  </p>
+  <div class="guardian-bar"><label for="choixPersonnage">Personnage à équiper<select id="choixPersonnage"></select></label><span>Choisis un build pour voir son équipement comme une grille de Gardien.</span></div>
 
-  <h2>Mes sets</h2>
+  <h2>Mes builds</h2>
   <div id="sets"></div>
 
-  <h2>Journal</h2>
+  <h2>Journal d’équipement</h2>
   <pre id="journal">(vide)</pre>
 
   <p><a href="generateur.html">Créer des builds</a> | <a href="arsenal.html">Mon arsenal</a></p>
@@ -257,21 +292,58 @@
       zoneSets.innerHTML = "";
 
       if (sets.length === 0) {
-        zoneSets.textContent = "Aucun set sauvegardé : crée-en un depuis la page des armures.";
+        zoneSets.textContent = "Aucun build sauvegardé. Crée-en un depuis le générateur pour le voir ici.";
         return;
       }
 
       sets.forEach(function (set, indexSet) {
-        const bloc = document.createElement("div");
-        bloc.className = "set";
+        const bloc = document.createElement("article");
+        bloc.className = "loadout-card";
+        const header = document.createElement("header");
+        header.className = "loadout-header";
+        const titreZone = document.createElement("div");
+        const titre = document.createElement("h3");
+        titre.className = "loadout-title";
+        const classe = document.createElement("span");
+        classe.className = "class-tag";
+        classe.textContent = CLASSES[classeDuSet(set)] || "Gardien";
+        titre.append(classe, document.createTextNode(set.nom || "Build sans nom"));
+        const sousTitre = document.createElement("p");
+        sousTitre.className = "loadout-subtitle";
+        sousTitre.textContent = (set.characterName || (set.characterId && personnages[set.characterId] && CLASSES[personnages[set.characterId].classType]) || "Gardien") +
+          (set.doctrine && set.doctrine.nom ? " · " + set.doctrine.nom : "") +
+          (set.bonus && set.bonus.setName ? " · bonus " + set.bonus.setName : "");
+        titreZone.append(titre, sousTitre);
+        const puissance = document.createElement("span");
+        puissance.className = "power-badge";
+        puissance.textContent = set.power ? "PUISSANCE " + set.power : "BUILD";
+        header.append(titreZone, puissance);
+        bloc.appendChild(header);
 
-        const objets = (set.pieces || []).concat(set.armes || []);
-        const noms = objets.map(function (p) { return p.nom; }).join(", ");
-        const texte = document.createElement("span");
-        texte.className = "set-summary";
-        const detailsBuild = [];
-        if (set.doctrine && set.doctrine.nom) detailsBuild.push("doctrine : " + set.doctrine.nom);
-        texte.textContent = set.nom + " — " + (noms || "aucun équipement") + (detailsBuild.length ? " · " + detailsBuild.join(" · ") : "");
+        const gear = document.createElement("div");
+        gear.className = "loadout-gear";
+        const sectionArmes = document.createElement("section");
+        sectionArmes.className = "gear-section";
+        sectionArmes.appendChild(creerTitreSection("Armes"));
+        const rangeeArmes = document.createElement("div");
+        rangeeArmes.className = "gear-row weapons";
+        for (const emplacement of ARMES) rangeeArmes.appendChild(creerTuile(equipementPourEmplacement(set.armes || [], emplacement), emplacement.nom, "arme"));
+        sectionArmes.appendChild(rangeeArmes);
+
+        const sectionArmure = document.createElement("section");
+        sectionArmure.className = "gear-section";
+        sectionArmure.appendChild(creerTitreSection("Armure"));
+        const rangeeArmure = document.createElement("div");
+        rangeeArmure.className = "gear-row armor";
+        for (const emplacement of ARMURES) rangeeArmure.appendChild(creerTuile(equipementPourEmplacement(set.pieces || [], emplacement), emplacement.nom, "armure"));
+        sectionArmure.appendChild(rangeeArmure);
+        gear.append(sectionArmes, sectionArmure);
+        bloc.appendChild(gear);
+
+        const inferieur = document.createElement("div");
+        inferieur.className = "loadout-lower";
+        inferieur.append(creerPanneauStats(set), creerPanneauDoctrine(set));
+        bloc.appendChild(inferieur);
 
         const bouton = document.createElement("button");
         bouton.textContent = "Équiper ce set";
@@ -279,6 +351,7 @@
           const idPersonnage = set.characterId && personnages[set.characterId] ? set.characterId : choixPersonnage.value;
           choixPersonnage.value = idPersonnage;
           const perso = personnages[idPersonnage];
+          if (!perso) { alert("Choisis un personnage avant d’équiper ce build."); return; }
           const question = "Équiper « " + set.nom + " » sur " + CLASSES[perso.classType] + " ?";
           if (confirm(question)) {
             bouton.disabled = true;
@@ -301,13 +374,139 @@
         const actions = document.createElement("div");
         actions.className = "set-actions";
         actions.append(bouton, boutonModifier);
-        bloc.appendChild(texte);
-        const details = document.createElement("span");
-        details.className = "set-details";
-        details.textContent = "Classe : " + (CLASSES[classeDuSet(set)] || "inconnue");
-        bloc.append(actions, editeur, details);
+        bloc.append(actions, editeur);
         zoneSets.appendChild(bloc);
       });
+    }
+
+    function creerTitreSection(texte) {
+      const titre = document.createElement("h4");
+      titre.textContent = texte;
+      return titre;
+    }
+
+    function creerTuile(objet, emplacement, type) {
+      const tuile = document.createElement("div");
+      tuile.className = "gear-tile" + (objet && objet.exotique ? " is-exotic" : "");
+      const icone = document.createElement("div");
+      icone.className = "gear-icon";
+      if (objet && objet.icone) {
+        const image = document.createElement("img");
+        image.src = "https://www.bungie.net" + objet.icone;
+        image.alt = objet.nom || emplacement;
+        icone.appendChild(image);
+      } else {
+        const vide = document.createElement("span");
+        vide.className = "empty-slot";
+        vide.textContent = type === "arme" ? "＋" : "◇";
+        icone.appendChild(vide);
+      }
+      const slot = document.createElement("span");
+      slot.className = "gear-slot-label";
+      slot.textContent = emplacement;
+      const nom = document.createElement("span");
+      nom.className = "gear-name";
+      nom.textContent = objet && objet.nom || "Aucun équipement";
+      tuile.append(icone, slot, nom);
+      if (objet && objet.lieu) {
+        const lieu = document.createElement("span");
+        lieu.className = "gear-location";
+        lieu.textContent = objet.lieuLabel || objet.lieu;
+        tuile.appendChild(lieu);
+      }
+      return tuile;
+    }
+
+    function creerPanneauStats(set) {
+      const panneau = document.createElement("section");
+      panneau.className = "loadout-panel";
+      panneau.appendChild(creerTitreSection("Statistiques du build"));
+      const grille = document.createElement("div");
+      grille.className = "stat-lines";
+      const noms = ["Mobilité", "Résistance", "Récupération", "Discipline", "Intellect", "Force"];
+      if (Array.isArray(set.stats) && set.stats.length) {
+        noms.forEach(function (nom, index) {
+          const valeur = Number(set.stats[index]) || 0;
+          const ligne = document.createElement("div");
+          ligne.className = "stat-line";
+          const etiquette = document.createElement("span");
+          etiquette.textContent = nom;
+          const piste = document.createElement("div");
+          piste.className = "stat-track";
+          const remplissage = document.createElement("div");
+          remplissage.className = "stat-fill";
+          remplissage.style.width = Math.max(0, Math.min(100, valeur / 200 * 100)) + "%";
+          piste.appendChild(remplissage);
+          const total = document.createElement("strong");
+          total.className = "stat-value";
+          total.textContent = String(valeur);
+          ligne.append(etiquette, piste, total);
+          grille.appendChild(ligne);
+        });
+      } else {
+        const aide = document.createElement("p");
+        aide.className = "set-details";
+        aide.textContent = "Ces valeurs seront affichées pour les builds sauvegardés depuis la version actuelle du générateur.";
+        grille.appendChild(aide);
+      }
+      panneau.appendChild(grille);
+      if (set.bonus && set.bonus.perkNames && set.bonus.perkNames.length) {
+        const bonus = document.createElement("p");
+        bonus.className = "bonus-line";
+        bonus.textContent = (set.bonus.setName || "Bonus de set") + " · " + set.bonus.perkNames.join(" / ");
+        panneau.appendChild(bonus);
+      }
+      return panneau;
+    }
+
+    function creerPanneauDoctrine(set) {
+      const panneau = document.createElement("section");
+      panneau.className = "loadout-panel";
+      panneau.appendChild(creerTitreSection("Doctrine et aptitudes"));
+      const doctrine = set.doctrine;
+      if (!doctrine) {
+        const aide = document.createElement("p");
+        aide.className = "set-details";
+        aide.textContent = "Aucune doctrine enregistrée.";
+        panneau.appendChild(aide);
+        return panneau;
+      }
+      const tete = document.createElement("div");
+      tete.className = "subclass-head";
+      if (doctrine.icone) {
+        const image = document.createElement("img");
+        image.src = "https://www.bungie.net" + doctrine.icone;
+        image.alt = "";
+        tete.appendChild(image);
+      }
+      tete.appendChild(document.createTextNode(doctrine.nom || "Doctrine"));
+      panneau.appendChild(tete);
+      const liste = document.createElement("div");
+      liste.className = "ability-list";
+      for (const aptitude of doctrine.aptitudes || []) {
+        const item = document.createElement("div");
+        item.className = "ability-item";
+        if (aptitude.icone) {
+          const image = document.createElement("img");
+          image.src = "https://www.bungie.net" + aptitude.icone;
+          image.alt = "";
+          item.appendChild(image);
+        }
+        const texte = document.createElement("span");
+        const type = document.createElement("small");
+        type.textContent = aptitude.label || aptitude.type || "Aptitude";
+        texte.append(type, document.createTextNode(aptitude.nom || "Aptitude"));
+        item.appendChild(texte);
+        liste.appendChild(item);
+      }
+      if (!doctrine.aptitudes || !doctrine.aptitudes.length) {
+        const aide = document.createElement("p");
+        aide.className = "set-details";
+        aide.textContent = "Pas d’aptitudes enregistrées pour ce build.";
+        liste.appendChild(aide);
+      }
+      panneau.appendChild(liste);
+      return panneau;
     }
 
     function classeDuSet(set) {
@@ -380,7 +579,7 @@
 
       const aide = document.createElement("p");
       aide.className = "editor-help";
-      aide.textContent = "Choisis une autre pièce de ton coffre ou de tes personnages. Les mods d’armure déjà enregistrés sont gardés si tu conserves la pièce; une nouvelle pièce est ajoutée sans mods préconfigurés.";
+      aide.textContent = "Choisis une autre pièce de ton coffre ou de tes personnages. Les mods restent si tu gardes la pièce; une nouvelle pièce est enregistrée sans mods. Les totaux de stats seront recalculés avec un nouveau résultat du générateur.";
       editeur.appendChild(aide);
       const actions = document.createElement("div");
       actions.className = "editor-actions";
@@ -419,6 +618,7 @@
         }
         sets[indexSet].pieces = nouvellesArmures;
         sets[indexSet].armes = nouvellesArmes;
+        delete sets[indexSet].stats;
         localStorage.setItem("setsArmures", JSON.stringify(sets));
         afficherSets();
         statut.textContent = "Équipement modifié et enregistré sur cet appareil.";

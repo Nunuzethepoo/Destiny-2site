@@ -25,6 +25,13 @@
     .builder-subsection .builder-control{font-size:12px}
     .weapon-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
     .context-panel{padding:10px 12px;border:1px solid #344251;border-radius:3px;background:#0a1016;color:#cbd4dc;font-size:12px;line-height:1.6}
+    .ability-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+    .ability-grid:empty{display:none}
+    .ability-grid .builder-control select{min-height:40px}
+    .ability-title{grid-column:1/-1;margin:0;color:#aebbc7;font-size:10px;line-height:1.55}
+    .ability-preview{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .ability-chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:4px 7px;border:1px solid #ffffff16;border-radius:3px;background:#080d12;color:#c9d2db;font-size:10px}
+    .ability-chip img{width:24px;height:24px;object-fit:cover;border:1px solid #46515e}
     .context-panel strong{color:#edf1f4}
     .stats-table{width:100%;border-collapse:separate;border-spacing:0 7px;table-layout:fixed}
     .stats-table th{padding:0 10px 5px;color:#81909e;text-align:left;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
@@ -95,6 +102,7 @@
           <h3>Doctrine / sous-classe</h3>
           <label class="builder-control" for="choixDoctrine"><span>Doctrine prévue</span><select id="choixDoctrine"></select></label>
           <p id="doctrineInfo" class="context-panel" aria-live="polite">Lecture de la doctrine du Gardien…</p>
+          <div id="doctrineAptitudes" class="ability-grid" aria-live="polite"><p class="ability-title">Sélectionne une doctrine pour charger ses grenades, capacités, aspects et fragments.</p></div>
         </div>
         <div class="builder-subsection">
           <h3>Armes du build</h3>
@@ -169,12 +177,18 @@
     let toutesLesArmes = [];
     let profilActif = null;
     let plansDoctrine = {};
+    let plansAptitudes = {};
+    let definitionsDoctrine = {};
+    let definitionsCategoriesSocket = {};
+    let definitionsTypesSocket = {};
+    let requeteAptitudes = 0;
     let socketParInstance = {};
     let definitionMods = {};
     let characterPlugSets = {};
     let profilePlugSets = {};
     let compteActif = null;
     let composantsModsCharges = false;
+    let composantsDoctrineCharges = false;
 
     // ---------- Parler à Bungie et charger les données ----------
 
@@ -644,6 +658,184 @@
       plansDoctrine[idPersonnage] = Number(choixDoctrine.value);
     }
 
+    function typeAptitude(nom) {
+      const texte = String(nom || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[_-]+/g, " ");
+      if (texte.indexOf("aspect") !== -1) return "aspect";
+      if (texte.indexOf("fragment") !== -1) return "fragment";
+      if (texte.indexOf("grenade") !== -1) return "grenade";
+      if (texte.indexOf("melee") !== -1 || texte.indexOf("corps a corps") !== -1) return "melee";
+      if (texte.indexOf("class abil") !== -1 || texte.indexOf("capacite de classe") !== -1 || texte.indexOf("competence de classe") !== -1 || texte.indexOf("aptitude de classe") !== -1) return "classAbility";
+      return "";
+    }
+
+    function nomAptitude(type) {
+      return { aspect: "Aspect", fragment: "Fragment", grenade: "Grenade", melee: "Corps à corps", classAbility: "Capacité de classe" }[type] || "Aptitude";
+    }
+
+    function clePlanAptitude(idPersonnage, hashDoctrine) {
+      return idPersonnage + ":" + hashDoctrine;
+    }
+
+    async function chargerComposantsDoctrine() {
+      if (composantsDoctrineCharges) return;
+      const profil = await appelerBungie(
+        "/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=305"
+      );
+      profilePlugSets = (profil.profilePlugSets && profil.profilePlugSets.data && profil.profilePlugSets.data.plugs) || {};
+      characterPlugSets = {};
+      const donneesPersos = profil.characterPlugSets && profil.characterPlugSets.data || {};
+      for (const id in donneesPersos) characterPlugSets[id] = donneesPersos[id].plugs || {};
+      socketParInstance = (profil.itemComponents && profil.itemComponents.sockets && profil.itemComponents.sockets.data) || {};
+      composantsDoctrineCharges = true;
+    }
+
+    async function definitionSocketCategory(hash) {
+      if (!hash) return null;
+      if (Object.prototype.hasOwnProperty.call(definitionsCategoriesSocket, hash)) return definitionsCategoriesSocket[hash];
+      let definition = null;
+      try { definition = await appelerBungie("/Destiny2/Manifest/DestinySocketCategoryDefinition/" + hash + "/"); } catch (_) {}
+      definitionsCategoriesSocket[hash] = definition;
+      return definition;
+    }
+
+    async function definitionSocketType(hash) {
+      if (!hash) return null;
+      if (Object.prototype.hasOwnProperty.call(definitionsTypesSocket, hash)) return definitionsTypesSocket[hash];
+      let definition = null;
+      try { definition = await appelerBungie("/Destiny2/Manifest/DestinySocketTypeDefinition/" + hash + "/"); } catch (_) {}
+      definitionsTypesSocket[hash] = definition;
+      return definition;
+    }
+
+    async function chargerAptitudesDoctrine() {
+      const numero = ++requeteAptitudes;
+      const idPersonnage = choixPersonnage.value;
+      const hashDoctrine = Number(choixDoctrine.value) || 0;
+      const zone = document.getElementById("doctrineAptitudes");
+      zone.innerHTML = "";
+      if (!hashDoctrine || !idPersonnage) {
+        zone.innerHTML = "<p class=\"ability-title\">Sélectionne une doctrine pour afficher ses aptitudes.</p>";
+        return;
+      }
+      zone.innerHTML = "<p class=\"ability-title\">Lecture des aptitudes de cette doctrine…</p>";
+      try {
+        await chargerComposantsDoctrine();
+        const definition = definitionsDoctrine[hashDoctrine] || await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hashDoctrine + "/");
+        definitionsDoctrine[hashDoctrine] = definition;
+        if (numero !== requeteAptitudes) return;
+
+        const sockets = definition && definition.sockets;
+        const entrees = sockets && sockets.socketEntries || [];
+        const categories = sockets && sockets.socketCategories || [];
+        const nomsCategories = await Promise.all(categories.map(async function (categorie) {
+          const categorieDef = await definitionSocketCategory(Number(categorie.socketCategoryHash));
+          return {
+            categorie: categorie,
+            nom: categorieDef && categorieDef.displayProperties && categorieDef.displayProperties.name || ""
+          };
+        }));
+        const groupeIndex = {};
+        for (const groupe of nomsCategories) {
+          const type = typeAptitude(groupe.nom);
+          if (!type) continue;
+          for (const index of groupe.categorie.socketIndexes || []) {
+            groupeIndex[index] = { type: type, nom: groupe.nom };
+          }
+        }
+        const inconnus = [];
+        for (let index = 0; index < entrees.length; index++) {
+          if (groupeIndex[index]) continue;
+          const entree = entrees[index];
+          if (entree && entree.socketTypeHash) inconnus.push({ index: index, socketTypeHash: Number(entree.socketTypeHash) });
+        }
+        const typesUniques = Array.from(new Set(inconnus.map(function (socket) { return socket.socketTypeHash; })));
+        await Promise.all(typesUniques.map(definitionSocketType));
+        const groupesType = await Promise.all(inconnus.map(async function (socket) {
+          const typeDef = definitionsTypesSocket[socket.socketTypeHash];
+          const categorieDef = typeDef && await definitionSocketCategory(Number(typeDef.socketCategoryHash));
+          const identifiants = (typeDef && typeDef.plugWhitelist || []).map(function (entree) { return entree.categoryIdentifier || ""; }).join(" ");
+          return { index: socket.index, nom: categorieDef && categorieDef.displayProperties && categorieDef.displayProperties.name || typeDef && typeDef.displayProperties && typeDef.displayProperties.name || identifiants };
+        }));
+        for (const groupe of groupesType) {
+          const type = typeAptitude(groupe.nom);
+          if (type) groupeIndex[groupe.index] = { type: type, nom: groupe.nom };
+        }
+        if (numero !== requeteAptitudes) return;
+
+        const equipement = profilActif.characterEquipment && profilActif.characterEquipment.data && profilActif.characterEquipment.data[idPersonnage];
+        const doctrineActuelle = equipement && (equipement.items || []).find(function (objet) { return Number(objet.itemHash) === hashDoctrine; });
+        const donneesSocketActuelle = doctrineActuelle && doctrineActuelle.itemInstanceId && socketParInstance[doctrineActuelle.itemInstanceId];
+        const socketsActuelles = donneesSocketActuelle && donneesSocketActuelle.sockets || [];
+        const clePlan = clePlanAptitude(idPersonnage, hashDoctrine);
+        const plan = plansAptitudes[clePlan] || {};
+        plansAptitudes[clePlan] = plan;
+        zone.innerHTML = "";
+        const titre = document.createElement("p");
+        titre.className = "ability-title";
+        titre.textContent = "Choisis les aptitudes à enregistrer avec ce build. Les options viennent des prises de la doctrine.";
+        zone.appendChild(titre);
+
+        let nombre = 0;
+        for (let index = 0; index < entrees.length; index++) {
+          const groupe = groupeIndex[index];
+          const entree = entrees[index];
+          if (!groupe || !entree || entree.defaultVisible === false) continue;
+          const runtime = socketsActuelles[index] || {};
+          const source = Object.assign({}, runtime, { reusablePlugItems: entree.reusablePlugItems || [] });
+          let hashes = plugsPourSocket(source, entree.reusablePlugSetHash);
+          if (entree.randomizedPlugSetHash) hashes = hashes.concat(plugsPourSocket(source, entree.randomizedPlugSetHash));
+          if (entree.singleInitialItemHash) hashes.push(Number(entree.singleInitialItemHash));
+          if (runtime.plugHash) hashes.push(Number(runtime.plugHash));
+          hashes = Array.from(new Set(hashes.map(Number).filter(function (hash) { return hash && definitionsLite[hash]; })));
+          if (!hashes.length) continue;
+
+          const key = String(index);
+          let selection = plan[key];
+          const plugActuel = Number(runtime.plugHash) || 0;
+          if (!selection || !hashes.includes(Number(selection.plugItemHash))) {
+            const hashDefaut = hashes.includes(plugActuel) ? plugActuel : Number(entree.singleInitialItemHash) || hashes[0];
+            selection = { type: groupe.type, socketIndex: index, plugItemHash: hashDefaut };
+            plan[key] = selection;
+          }
+          const numeroGroupe = entrees.slice(0, index + 1).filter(function (_socket, socketIndex) {
+            return groupeIndex[socketIndex] && groupeIndex[socketIndex].type === groupe.type;
+          }).length;
+          const champ = document.createElement("label");
+          champ.className = "builder-control";
+          const etiquette = document.createElement("span");
+          etiquette.textContent = nomAptitude(groupe.type) + (numeroGroupe > 1 || entrees.filter(function (_socket, socketIndex) { return groupeIndex[socketIndex] && groupeIndex[socketIndex].type === groupe.type; }).length > 1 ? " " + numeroGroupe : "");
+          const select = document.createElement("select");
+          select.dataset.socketIndex = String(index);
+          for (const hash of hashes) {
+            const plug = definitionsLite[hash];
+            const option = document.createElement("option");
+            option.value = String(hash);
+            option.textContent = plug.displayProperties && plug.displayProperties.name || "Aptitude " + hash;
+            select.appendChild(option);
+          }
+          select.value = String(selection.plugItemHash);
+          select.addEventListener("change", function () {
+            plan[key] = plan[key] || {};
+            plan[key].type = groupe.type;
+            plan[key].socketIndex = index;
+            plan[key].plugItemHash = Number(select.value);
+          });
+          champ.append(etiquette, select);
+          zone.appendChild(champ);
+          nombre++;
+        }
+        if (!nombre) {
+          const absent = document.createElement("p");
+          absent.className = "ability-title";
+          absent.textContent = "Aucune prise de grenade, mêlée, capacité de classe, aspect ou fragment disponible pour cette doctrine.";
+          zone.appendChild(absent);
+        }
+      } catch (erreur) {
+        if (numero !== requeteAptitudes) return;
+        zone.innerHTML = "<p class=\"ability-title\">Impossible de lire les aptitudes : " + String(erreur.message || "erreur Bungie").replace(/[<>]/g, "") + "</p>";
+      }
+    }
+
     function afficherDoctrine() {
       const idPersonnage = choixPersonnage.value;
       const personnage = profilActif && profilActif.characters && profilActif.characters.data && profilActif.characters.data[idPersonnage];
@@ -657,19 +849,10 @@
       const hashDoctrine = Number(choixDoctrine.value) || Number(objetDoctrine && objetDoctrine.itemHash) || 0;
       const definitionDoctrine = definitionsLite[hashDoctrine];
       const estDoctrineActuelle = Number(objetDoctrine && objetDoctrine.itemHash) === hashDoctrine;
-      const socketsDoctrine = estDoctrineActuelle && objetDoctrine && objetDoctrine.itemInstanceId && socketParInstance[objetDoctrine.itemInstanceId];
-      const prisesDoctrine = socketsDoctrine && socketsDoctrine.sockets || [];
-      const nomsPrises = prisesDoctrine.map(function (prise) {
-        const hash = Number(prise.plugHash) || 0;
-        const definition = definitionsLite[hash];
-        return definition && definition.displayProperties && definition.displayProperties.name;
-      }).filter(function (nom) { return nom && nom !== "Inconnu"; });
       const nomDoctrine = definitionDoctrine && definitionDoctrine.displayProperties && definitionDoctrine.displayProperties.name;
       doctrineInfo.textContent = nomDoctrine
-        ? (estDoctrineActuelle ? "Équipée actuellement : " : "À prévoir : ") + nomDoctrine +
-          (nomsPrises.length ? " · configuration actuelle : " + nomsPrises.join(" · ") : "")
+        ? (estDoctrineActuelle ? "Équipée actuellement : " : "À prévoir : ") + nomDoctrine
         : "Doctrine actuelle introuvable dans les données Bungie.";
-
     }
 
     function remplirPersonnages() {
@@ -686,6 +869,7 @@
       remplirDoctrine();
       afficherArmes();
       afficherDoctrine();
+      chargerAptitudesDoctrine();
     }
 
     function afficherArmes() {
@@ -730,6 +914,7 @@
           nom: arme.nom,
           icone: arme.icone,
           emplacement: BUCKETS_ARMES[bucketHash].nom,
+          bucketHash: Number(bucketHash),
           idInstance: arme.idInstance,
           hash: arme.hash,
           lieu: arme.lieuLabel
@@ -746,26 +931,43 @@
           }
         }
       }
+      const planAptitudes = plansAptitudes[clePlanAptitude(choixPersonnage.value, hashDoctrine)] || {};
+      const aptitudes = Object.keys(planAptitudes).map(function (socketIndex) {
+        const selection = planAptitudes[socketIndex];
+        const definition = definitionsLite[selection.plugItemHash];
+        if (!definition || !definition.displayProperties) return null;
+        return {
+          type: selection.type,
+          label: nomAptitude(selection.type),
+          socketIndex: Number(selection.socketIndex),
+          plugItemHash: Number(selection.plugItemHash),
+          nom: definition.displayProperties.name || "Aptitude",
+          icone: definition.displayProperties.icon || ""
+        };
+      }).filter(Boolean).sort(function (a, b) { return a.socketIndex - b.socketIndex; });
       return {
         classe: Number(choixClasse.value),
         characterId: choixPersonnage.value || null,
         characterName: personnage ? CLASSES[personnage.classType] || "Gardien" : "Gardien",
+        characterPower: Number(personnage && personnage.light) || 0,
         armes: armes,
         doctrine: hashDoctrine ? {
           hash: hashDoctrine,
           idInstance: objetDoctrine && objetDoctrine.itemInstanceId || null,
           nom: definitionDoctrine && definitionDoctrine.displayProperties && definitionDoctrine.displayProperties.name || "Doctrine choisie",
           icone: definitionDoctrine && definitionDoctrine.displayProperties && definitionDoctrine.displayProperties.icon || "",
-          plugs: plugs
+          plugs: plugs,
+          aptitudes: aptitudes
         } : null
       };
     }
 
     choixClasse.addEventListener("change", function () { majExotiques(); majBonus(); remplirPersonnages(); });
-    choixPersonnage.addEventListener("change", function () { remplirDoctrine(); afficherArmes(); afficherDoctrine(); });
+    choixPersonnage.addEventListener("change", function () { remplirDoctrine(); afficherArmes(); afficherDoctrine(); chargerAptitudesDoctrine(); });
     choixDoctrine.addEventListener("change", function () {
       plansDoctrine[choixPersonnage.value] = Number(choixDoctrine.value) || 0;
       afficherDoctrine();
+      chargerAptitudesDoctrine();
     });
     choixBonus.addEventListener("change", afficherInfoBonus);
     document.getElementById("inclureCoffre").addEventListener("change", function () { majExotiques(); majBonus(); });
@@ -1065,6 +1267,23 @@
           doctrine.textContent = "Doctrine prévue : " + contexte.doctrine.nom +
             (contexte.doctrine.plugs.length ? " · " + contexte.doctrine.plugs.map(function (plug) { return plug.nom; }).join(" / ") : "");
           bloc.appendChild(doctrine);
+          if (contexte.doctrine.aptitudes && contexte.doctrine.aptitudes.length) {
+            const apercuAptitudes = document.createElement("div");
+            apercuAptitudes.className = "ability-preview";
+            for (const aptitude of contexte.doctrine.aptitudes) {
+              const chip = document.createElement("span");
+              chip.className = "ability-chip";
+              if (aptitude.icone) {
+                const imageAptitude = document.createElement("img");
+                imageAptitude.src = "https://www.bungie.net" + aptitude.icone;
+                imageAptitude.alt = "";
+                chip.appendChild(imageAptitude);
+              }
+              chip.appendChild(document.createTextNode(aptitude.label + " · " + aptitude.nom));
+              apercuAptitudes.appendChild(chip);
+            }
+            bloc.appendChild(apercuAptitudes);
+          }
         }
 
         // Afficher les six valeurs même si une définition de nom manque.
@@ -1115,13 +1334,17 @@
           if (!nom || nom.trim() === "") { return; }
 
           const sauvegardes = JSON.parse(localStorage.getItem("setsArmures")) || [];
+          const contexteSauvegarde = contexteBuild();
           sauvegardes.push({
             nom: nom.trim(),
             pieces: resultat.choix.map(function (c) { return Object.assign({}, c.piece, { mods: c.modPlan || [] }); }),
-            characterId: contexte.characterId,
-            classe: contexte.classe,
-            armes: contexte.armes,
-            doctrine: contexte.doctrine,
+            characterId: contexteSauvegarde.characterId,
+            classe: contexteSauvegarde.classe,
+            characterName: contexteSauvegarde.characterName,
+            power: contexteSauvegarde.characterPower,
+            armes: contexteSauvegarde.armes,
+            doctrine: contexteSauvegarde.doctrine,
+            stats: totaux,
             bonus: bonusChoisi ? {
               setHash: bonusChoisi.setHash,
               requiredCount: bonusChoisi.requiredCount,
@@ -1253,6 +1476,7 @@
             emplacement: emplacement,
             classe: definition.classType,
             exotique: definition.inventory.tierType === 6,
+            tierType: Number(definition.inventory.tierType) || 0,
             setHash: Number(definition.equippingBlock && definition.equippingBlock.equipableItemSetHash) || 0,
             lieu: element.lieu,
             idInstance: element.objet.itemInstanceId,
