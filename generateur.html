@@ -180,6 +180,7 @@
     let plansAptitudes = {};
     let definitionsDoctrine = {};
     let definitionsPlugSetsDoctrine = {};
+    let definitionsAptitudesDoctrine = {};
     let definitionsCategoriesSocket = {};
     let definitionsTypesSocket = {};
     let plugsReutilisablesDoctrine = {};
@@ -747,11 +748,29 @@
 
     async function definitionPlugSet(hash) {
       if (!hash) return null;
-      if (Object.prototype.hasOwnProperty.call(definitionsPlugSetsDoctrine, hash)) return definitionsPlugSetsDoctrine[hash];
+      if (definitionsPlugSetsDoctrine[hash]) return definitionsPlugSetsDoctrine[hash];
       let definition = null;
       try { definition = await appelerBungie("/Destiny2/Manifest/DestinyPlugSetDefinition/" + hash + "/"); } catch (_) {}
-      definitionsPlugSetsDoctrine[hash] = definition;
+      if (definition) definitionsPlugSetsDoctrine[hash] = definition;
       return definition;
+    }
+
+    async function chargerDefinitionsAptitudes(hashes) {
+      const manquants = Array.from(new Set(hashes.map(Number))).filter(function (hash) {
+        return hash && !definitionsLite[hash] && !Object.prototype.hasOwnProperty.call(definitionsAptitudesDoctrine, hash);
+      });
+      let prochain = 0;
+      async function worker() {
+        while (prochain < manquants.length) {
+          const hash = manquants[prochain++];
+          try {
+            definitionsAptitudesDoctrine[hash] = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/");
+          } catch (_) {
+            definitionsAptitudesDoctrine[hash] = null;
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(4, manquants.length) }, worker));
     }
 
     async function chargerAptitudesDoctrine() {
@@ -798,25 +817,28 @@
             groupeIndex[index] = { type: type, nom: groupe.nom };
           }
         }
-        const inconnus = [];
-        for (let index = 0; index < entrees.length; index++) {
-          if (groupeIndex[index]) continue;
-          const entree = entrees[index];
-          if (entree && entree.socketTypeHash) inconnus.push({ index: index, socketTypeHash: Number(entree.socketTypeHash) });
-        }
-        const typesUniques = Array.from(new Set(inconnus.map(function (socket) { return socket.socketTypeHash; })));
+        const socketsParType = entrees.map(function (entree, index) {
+          return entree && entree.socketTypeHash ? { index: index, socketTypeHash: Number(entree.socketTypeHash) } : null;
+        }).filter(Boolean);
+        const typesUniques = Array.from(new Set(socketsParType.map(function (socket) { return socket.socketTypeHash; })));
         await Promise.all(typesUniques.map(definitionSocketType));
-        const groupesType = await Promise.all(inconnus.map(async function (socket) {
+        const groupesType = await Promise.all(socketsParType.map(async function (socket) {
           const typeDef = definitionsTypesSocket[socket.socketTypeHash];
           const categorieDef = typeDef && await definitionSocketCategory(Number(typeDef.socketCategoryHash));
-          const identifiants = (typeDef && typeDef.plugWhitelist || []).map(function (entree) { return entree.categoryIdentifier || ""; }).join(" ");
+          const whitelist = typeDef && typeDef.plugWhitelist || [];
+          const identifiants = whitelist.map(function (entree) { return entree.categoryIdentifier || ""; }).join(" ");
           const nomCategorie = categorieDef && categorieDef.displayProperties && categorieDef.displayProperties.name || "";
           const nomType = typeDef && typeDef.displayProperties && typeDef.displayProperties.name || "";
-          return { index: socket.index, nom: identifiants || nomCategorie || nomType };
+          const hashes = whitelist.flatMap(function (entree) { return entree.reinitializationPossiblePlugHashes || []; });
+          return { index: socket.index, nom: [identifiants, nomCategorie, nomType].filter(Boolean).join(" "), hashes: hashes };
         }));
+        const plugsWhitelistParSocket = {};
         for (const groupe of groupesType) {
-          const type = typeAptitude(groupe.nom);
-          if (type) groupeIndex[groupe.index] = { type: type, nom: groupe.nom };
+          plugsWhitelistParSocket[groupe.index] = groupe.hashes;
+          if (!groupeIndex[groupe.index]) {
+            const type = typeAptitude(groupe.nom);
+            if (type) groupeIndex[groupe.index] = { type: type, nom: groupe.nom };
+          }
         }
         if (numero !== requeteAptitudes) return;
 
@@ -855,9 +877,12 @@
               return Number(plug && (plug.plugItemHash || plug.itemHash));
             }));
           });
+          hashes = hashes.concat(plugsWhitelistParSocket[index] || []);
           if (entree.singleInitialItemHash) hashes.push(Number(entree.singleInitialItemHash));
           if (runtime.plugHash) hashes.push(Number(runtime.plugHash));
-          hashes = Array.from(new Set(hashes.map(Number).filter(function (hash) { return hash && definitionsLite[hash]; })));
+          hashes = Array.from(new Set(hashes.map(Number).filter(Boolean)));
+          await chargerDefinitionsAptitudes(hashes);
+          hashes = hashes.filter(function (hash) { return definitionsLite[hash] || definitionsAptitudesDoctrine[hash]; });
           if (!hashes.length) continue;
 
           const key = String(index);
@@ -878,7 +903,7 @@
           const select = document.createElement("select");
           select.dataset.socketIndex = String(index);
           for (const hash of hashes) {
-            const plug = definitionsLite[hash];
+            const plug = definitionsLite[hash] || definitionsAptitudesDoctrine[hash];
             const option = document.createElement("option");
             option.value = String(hash);
             option.textContent = plug.displayProperties && plug.displayProperties.name || "Aptitude " + hash;
