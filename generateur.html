@@ -74,7 +74,7 @@
 </head>
 <body>
   <h1>Générateur de build</h1>
-  <p class="builder-intro">Choisis ton Gardien, le bonus d’armure, les statistiques à privilégier et si le coffre doit être pris en compte. VIGIE compare les pièces et sélectionne automatiquement les mods de stats disponibles.</p>
+  <p class="builder-intro">Choisis ton Gardien, le bonus d’armure, les statistiques à privilégier et les minimums visés. VIGIE ajuste les mods pour atteindre ces valeurs quand les prises et l’énergie le permettent.</p>
   <p id="statut" class="load-status" role="status" aria-live="polite">Chargement de ton inventaire…</p>
 
   <div id="formulaire" class="builder-grid" style="display:none">
@@ -113,7 +113,7 @@
             <label class="builder-control" for="armeLourde"><span>Puissante</span><select id="armeLourde"></select></label>
           </div>
         </div>
-        <p class="bonus-info">Les mods de statistiques sur les armures sont calculés automatiquement selon tes priorités, puis sauvegardés avec le build.</p>
+        <p class="bonus-info">Les mods sont répartis pour atteindre tes minimums de stats si possible, puis améliorer les priorités avec l’énergie disponible. Les choix sont sauvegardés avec le build.</p>
       </div>
     </section>
 
@@ -375,35 +375,199 @@
       return resultat;
     }
 
-    function meilleurPlanMods(piece, poids) {
+    function catalogueModsPiece(piece) {
       const socketData = socketParInstance[piece.idInstance] || {};
       const sockets = socketData.sockets || [];
-      const plan = [];
-      const bonus = new Array(STATS_ARMURE.length).fill(0);
-      let energie = 0;
       const capacite = Number(piece.capaciteEnergie) || 10;
+      const catalogue = [];
       for (let i = 0; i < sockets.length; i++) {
         const socket = sockets[i];
         const entree = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries[i];
         if (!entree || !entree.reusablePlugSetHash) continue;
-        let meilleur = null;
-        for (const hash of plugsPourSocket(socket, entree.reusablePlugSetHash)) {
+        const options = [];
+        const hashes = plugsPourSocket(socket, entree.reusablePlugSetHash);
+        for (const hash of hashes) {
           const definition = definitionMods[hash];
           if (!definition || !definition.plug) continue;
           const stats = statsDuMod(hash);
-          const valeur = stats.reduce(function (s, v, k) { return s + v * poids[k]; }, 0);
-          if (valeur <= 0 || !stats.some(function (v) { return v > 0; })) continue;
+          if (!stats.some(function (value) { return value > 0; })) continue;
           const cout = Number(definition.plug.energyCost && definition.plug.energyCost.energyCost) || 0;
-          if (energie + cout > capacite) continue;
-          if (!meilleur || valeur > meilleur.valeur) meilleur = { hash: hash, stats: stats, valeur: valeur, cout: cout };
+          if (cout > capacite) continue;
+          options.push({ socketIndex: i, plugItemHash: hash, stats: stats, cout: cout });
+        }
+        if (options.length) catalogue.push({ socketIndex: i, options: options });
+      }
+      return { capacite: capacite, sockets: catalogue };
+    }
+
+    function meilleurPlanMods(piece, poids, minimums, catalogue) {
+      catalogue = catalogue || catalogueModsPiece(piece);
+      const plan = [];
+      const bonus = new Array(STATS_ARMURE.length).fill(0);
+      let energie = 0;
+      const base = STATS_ARMURE.map(function (hash) { return Number(piece.stats && piece.stats[hash]) || 0; });
+      const ciblesParPiece = minimums.map(function (minimum) {
+        return minimum > 0 ? Math.ceil(minimum / ORDRE.length) : 0;
+      });
+      for (const socket of catalogue.sockets) {
+        let meilleur = null;
+        for (const option of socket.options) {
+          if (energie + option.cout > catalogue.capacite) continue;
+          let progresCible = 0;
+          let valeurPriorite = 0;
+          option.stats.forEach(function (value, k) {
+            const actuel = base[k] + bonus[k];
+            progresCible += Math.min(Math.max(0, ciblesParPiece[k] - actuel), Math.max(0, value));
+            valeurPriorite += value * poids[k];
+          });
+          const valeur = progresCible * 100000 + valeurPriorite;
+          if (valeur <= 0) continue;
+          if (!meilleur || valeur > meilleur.valeur) meilleur = {
+            hash: option.plugItemHash,
+            stats: option.stats,
+            valeur: valeur,
+            cout: option.cout,
+            socketIndex: option.socketIndex
+          };
         }
         if (meilleur) {
-          plan.push({ socketIndex: i, plugItemHash: meilleur.hash });
+          plan.push({ socketIndex: meilleur.socketIndex, plugItemHash: meilleur.hash });
           energie += meilleur.cout;
           meilleur.stats.forEach(function (v, k) { bonus[k] += v; });
         }
       }
       return { plan: plan, bonus: bonus };
+    }
+
+    function optimiserModsBuild(choix, poids, minimums) {
+      const nombresPieces = choix.length;
+      const bases = choix.map(function (c) {
+        return STATS_ARMURE.map(function (hash) { return Number(c.piece.stats && c.piece.stats[hash]) || 0; });
+      });
+      const totauxBase = new Array(STATS_ARMURE.length).fill(0);
+      bases.forEach(function (base) { base.forEach(function (value, k) { totauxBase[k] += value; }); });
+      const capacites = choix.map(function (c) { return Number(c.piece.capaciteEnergie) || 10; });
+      const sockets = [];
+      choix.forEach(function (c, pieceIndex) {
+        const catalogue = c.catalogueMods || catalogueModsPiece(c.piece);
+        catalogue.sockets.forEach(function (socket) {
+          sockets.push({ pieceIndex: pieceIndex, socketIndex: socket.socketIndex, options: socket.options });
+        });
+      });
+      sockets.sort(function (a, b) { return a.options.length - b.options.length; });
+
+      const maximumRestant = new Array(sockets.length + 1);
+      maximumRestant[sockets.length] = new Array(STATS_ARMURE.length).fill(0);
+      for (let i = sockets.length - 1; i >= 0; i--) {
+        const maximum = maximumRestant[i + 1].slice();
+        for (const option of sockets[i].options) {
+          option.stats.forEach(function (value, k) {
+            if (value > maximum[k]) maximum[k] = value;
+          });
+        }
+        maximumRestant[i] = maximum;
+      }
+
+      function scoreStats(totaux) {
+        return totaux.reduce(function (score, value, k) {
+          return score + Math.min(value, MAX_STAT) * poids[k];
+        }, 0);
+      }
+
+      function satisfait(totaux) {
+        return minimums.every(function (minimum, k) { return totaux[k] >= minimum; });
+      }
+
+      function totauxDuPlan(plans) {
+        const totaux = totauxBase.slice();
+        plans.forEach(function (plan) {
+          plan.forEach(function (mod) {
+            const stats = statsDuMod(mod.plugItemHash);
+            stats.forEach(function (value, k) { totaux[k] += value; });
+          });
+        });
+        return totaux;
+      }
+
+      let meilleurScore = -Infinity;
+      let meilleursTotaux = null;
+      let meilleursPlans = null;
+      const planInitial = choix.map(function (c) { return (c.modPlan || []).map(function (mod) { return Object.assign({}, mod); }); });
+      const totauxInitiaux = totauxDuPlan(planInitial);
+      if (satisfait(totauxInitiaux)) {
+        meilleurScore = scoreStats(totauxInitiaux);
+        meilleursTotaux = totauxInitiaux;
+        meilleursPlans = planInitial;
+      }
+
+      const plansCourants = Array.from({ length: nombresPieces }, function () { return []; });
+      const energies = new Array(nombresPieces).fill(0);
+      let essais = 0;
+      const LIMITE_MODS = 80000;
+      function explorerMods(index, totaux) {
+        if (++essais > LIMITE_MODS) return;
+        const maximum = maximumRestant[index];
+        for (let k = 0; k < STATS_ARMURE.length; k++) {
+          if (totaux[k] + maximum[k] < minimums[k]) return;
+        }
+        if (meilleursTotaux) {
+          let scoreMaximum = 0;
+          for (let k = 0; k < STATS_ARMURE.length; k++) {
+            scoreMaximum += Math.min(totaux[k] + maximum[k], MAX_STAT) * poids[k];
+          }
+          if (scoreMaximum <= meilleurScore) return;
+        }
+        if (index >= sockets.length) {
+          if (!satisfait(totaux)) return;
+          const score = scoreStats(totaux);
+          if (score > meilleurScore) {
+            meilleurScore = score;
+            meilleursTotaux = totaux.slice();
+            meilleursPlans = plansCourants.map(function (plan) { return plan.map(function (mod) { return Object.assign({}, mod); }); });
+          }
+          return;
+        }
+
+        const socket = sockets[index];
+        const pieceIndex = socket.pieceIndex;
+        const options = socket.options.slice().sort(function (a, b) {
+          function valeur(option) {
+            let cible = 0;
+            let priorite = 0;
+            option.stats.forEach(function (value, k) {
+              cible += Math.min(Math.max(0, minimums[k] - totaux[k]), Math.max(0, value));
+              priorite += Math.min(Math.max(0, MAX_STAT - totaux[k]), Math.max(0, value)) * poids[k];
+            });
+            return cible * 100000 + priorite;
+          }
+          return valeur(b) - valeur(a);
+        });
+        for (const option of options) {
+          if (energies[pieceIndex] + option.cout > capacites[pieceIndex]) continue;
+          energies[pieceIndex] += option.cout;
+          plansCourants[pieceIndex].push({ socketIndex: socket.socketIndex, plugItemHash: option.plugItemHash });
+          const nouveaux = totaux.map(function (value, k) { return value + option.stats[k]; });
+          explorerMods(index + 1, nouveaux);
+          plansCourants[pieceIndex].pop();
+          energies[pieceIndex] -= option.cout;
+          if (essais > LIMITE_MODS) return;
+        }
+        explorerMods(index + 1, totaux);
+      }
+      explorerMods(0, totauxBase.slice());
+      if (!meilleursTotaux || !meilleursPlans) return null;
+
+      const choixOptimises = choix.map(function (c, index) {
+        const bonus = new Array(STATS_ARMURE.length).fill(0);
+        meilleursPlans[index].forEach(function (mod) {
+          statsDuMod(mod.plugItemHash).forEach(function (value, k) { bonus[k] += value; });
+        });
+        return Object.assign({}, c, {
+          v: bases[index].map(function (value, k) { return value + bonus[k]; }),
+          modPlan: meilleursPlans[index]
+        });
+      });
+      return { choix: choixOptimises, totaux: meilleursTotaux, score: meilleurScore };
     }
 
     function nomStat(hash) {
@@ -1116,9 +1280,9 @@
         poids.push(Number(document.getElementById("poids" + k).value) || 0);
         minimums.push(Number(document.getElementById("min" + k).value) || 0);
       }
-      const toutZero = poids.every(function (p) { return p === 0; });
+      const toutZero = poids.every(function (p) { return p === 0; }) && minimums.every(function (minimum) { return minimum === 0; });
       if (toutZero) {
-        message.textContent = "Mets une importance supérieure à 0 sur au moins une stat.";
+        message.textContent = "Choisis une priorité ou saisis au moins un minimum de stat.";
         return;
       }
 
@@ -1173,13 +1337,14 @@
           const base = STATS_ARMURE.map(function (hash) {
             return (a.stats && a.stats[hash]) || 0;
           });
-          const mods = meilleurPlanMods(a, poids);
+          const catalogueMods = catalogueModsPiece(a);
+          const mods = meilleurPlanMods(a, poids, minimums, catalogueMods);
           const v = base.map(function (value, k) { return value + mods.bonus[k]; });
           let score = 0;
           for (let k = 0; k < nbStats; k++) {
             score += v[k] * poids[k];
           }
-          return { piece: a, v: v, score: score, modPlan: mods.plan };
+          return { piece: a, v: v, score: score, modPlan: mods.plan, catalogueMods: catalogueMods };
         });
 
         liste = retirerDominees(liste, Boolean(bonusChoisi));
@@ -1280,6 +1445,15 @@
       }
 
       explorer(0, new Array(nbStats).fill(0), 0, 0, 0);
+      for (const resultat of meilleurs) {
+        const optimise = optimiserModsBuild(resultat.choix, poids, minimums);
+        if (optimise) {
+          resultat.choix = optimise.choix;
+          resultat.totaux = optimise.totaux;
+          resultat.score = optimise.score;
+        }
+      }
+      meilleurs.sort(function (a, b) { return b.score - a.score; });
       afficherResultats(meilleurs, interrompu, bonusChoisi, contexte);
     }
 
@@ -1618,3 +1792,4 @@
   </script>
 </body>
 </html>
+
