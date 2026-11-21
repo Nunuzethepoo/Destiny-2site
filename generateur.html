@@ -181,6 +181,8 @@
     let definitionsDoctrine = {};
     let definitionsCategoriesSocket = {};
     let definitionsTypesSocket = {};
+    let plugsReutilisablesDoctrine = {};
+    let chargementsAptitudes = {};
     let requeteAptitudes = 0;
     let socketParInstance = {};
     let definitionMods = {};
@@ -676,6 +678,41 @@
       return idPersonnage + ":" + hashDoctrine;
     }
 
+    function trouverObjetDoctrine(hashDoctrine, idPersonnage) {
+      const listes = [];
+      const equipement = profilActif && profilActif.characterEquipment && profilActif.characterEquipment.data && profilActif.characterEquipment.data[idPersonnage];
+      const inventaire = profilActif && profilActif.characterInventories && profilActif.characterInventories.data && profilActif.characterInventories.data[idPersonnage];
+      if (equipement && equipement.items) listes.push(equipement.items);
+      if (inventaire && inventaire.items) listes.push(inventaire.items);
+      const profil = profilActif && profilActif.profileInventory && profilActif.profileInventory.data;
+      if (profil && profil.items) listes.push(profil.items);
+      for (const liste of listes) {
+        const objet = liste.find(function (item) { return Number(item.itemHash) === Number(hashDoctrine); });
+        if (objet && objet.itemInstanceId) return objet;
+      }
+      return null;
+    }
+
+    async function chargerPlugsReutilisablesDoctrine(hashDoctrine, idPersonnage) {
+      const objet = trouverObjetDoctrine(hashDoctrine, idPersonnage);
+      if (!objet || !objet.itemInstanceId) return {};
+      const idInstance = String(objet.itemInstanceId);
+      if (Object.prototype.hasOwnProperty.call(plugsReutilisablesDoctrine, idInstance)) return plugsReutilisablesDoctrine[idInstance];
+      try {
+        const details = await appelerBungie(
+          "/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId +
+          "/Item/" + idInstance + "/?components=310"
+        );
+        const composant = details.reusablePlugs && details.reusablePlugs.data ||
+          details.itemComponents && details.itemComponents.reusablePlugs && details.itemComponents.reusablePlugs.data || {};
+        const plugs = composant.plugs || {};
+        plugsReutilisablesDoctrine[idInstance] = plugs;
+        return plugs;
+      } catch (_) {
+        return {};
+      }
+    }
+
     async function chargerComposantsDoctrine() {
       if (composantsDoctrineCharges) return;
       const profil = await appelerBungie(
@@ -712,9 +749,12 @@
       const idPersonnage = choixPersonnage.value;
       const hashDoctrine = Number(choixDoctrine.value) || 0;
       const zone = document.getElementById("doctrineAptitudes");
+      const cleAptitude = clePlanAptitude(idPersonnage, hashDoctrine);
+      chargementsAptitudes[cleAptitude] = false;
       zone.innerHTML = "";
       if (!hashDoctrine || !idPersonnage) {
         zone.innerHTML = "<p class=\"ability-title\">Sélectionne une doctrine pour afficher ses aptitudes.</p>";
+        chargementsAptitudes[cleAptitude] = true;
         return;
       }
       zone.innerHTML = "<p class=\"ability-title\">Lecture des aptitudes de cette doctrine…</p>";
@@ -754,7 +794,9 @@
           const typeDef = definitionsTypesSocket[socket.socketTypeHash];
           const categorieDef = typeDef && await definitionSocketCategory(Number(typeDef.socketCategoryHash));
           const identifiants = (typeDef && typeDef.plugWhitelist || []).map(function (entree) { return entree.categoryIdentifier || ""; }).join(" ");
-          return { index: socket.index, nom: categorieDef && categorieDef.displayProperties && categorieDef.displayProperties.name || typeDef && typeDef.displayProperties && typeDef.displayProperties.name || identifiants };
+          const nomCategorie = categorieDef && categorieDef.displayProperties && categorieDef.displayProperties.name || "";
+          const nomType = typeDef && typeDef.displayProperties && typeDef.displayProperties.name || "";
+          return { index: socket.index, nom: identifiants || nomCategorie || nomType };
         }));
         for (const groupe of groupesType) {
           const type = typeAptitude(groupe.nom);
@@ -762,10 +804,11 @@
         }
         if (numero !== requeteAptitudes) return;
 
-        const equipement = profilActif.characterEquipment && profilActif.characterEquipment.data && profilActif.characterEquipment.data[idPersonnage];
-        const doctrineActuelle = equipement && (equipement.items || []).find(function (objet) { return Number(objet.itemHash) === hashDoctrine; });
+        const doctrineActuelle = trouverObjetDoctrine(hashDoctrine, idPersonnage);
         const donneesSocketActuelle = doctrineActuelle && doctrineActuelle.itemInstanceId && socketParInstance[doctrineActuelle.itemInstanceId];
         const socketsActuelles = donneesSocketActuelle && donneesSocketActuelle.sockets || [];
+        const plugsReutilisables = await chargerPlugsReutilisablesDoctrine(hashDoctrine, idPersonnage);
+        if (numero !== requeteAptitudes) return;
         const clePlan = clePlanAptitude(idPersonnage, hashDoctrine);
         const plan = plansAptitudes[clePlan] || {};
         plansAptitudes[clePlan] = plan;
@@ -781,7 +824,8 @@
           const entree = entrees[index];
           if (!groupe || !entree || entree.defaultVisible === false) continue;
           const runtime = socketsActuelles[index] || {};
-          const source = Object.assign({}, runtime, { reusablePlugItems: entree.reusablePlugItems || [] });
+          const plugsInstance = Array.isArray(plugsReutilisables[index]) ? plugsReutilisables[index] : [];
+          const source = Object.assign({}, runtime, { reusablePlugItems: (entree.reusablePlugItems || []).concat(plugsInstance) });
           let hashes = plugsPourSocket(source, entree.reusablePlugSetHash);
           if (entree.randomizedPlugSetHash) hashes = hashes.concat(plugsPourSocket(source, entree.randomizedPlugSetHash));
           if (entree.singleInitialItemHash) hashes.push(Number(entree.singleInitialItemHash));
@@ -830,8 +874,10 @@
           absent.textContent = "Aucune prise de grenade, mêlée, capacité de classe, aspect ou fragment disponible pour cette doctrine.";
           zone.appendChild(absent);
         }
+        chargementsAptitudes[cleAptitude] = true;
       } catch (erreur) {
         if (numero !== requeteAptitudes) return;
+        chargementsAptitudes[cleAptitude] = true;
         zone.innerHTML = "<p class=\"ability-title\">Impossible de lire les aptitudes : " + String(erreur.message || "erreur Bungie").replace(/[<>]/g, "") + "</p>";
       }
     }
@@ -1335,6 +1381,11 @@
 
           const sauvegardes = JSON.parse(localStorage.getItem("setsArmures")) || [];
           const contexteSauvegarde = contexteBuild();
+          const cleAptitude = contexteSauvegarde.doctrine && clePlanAptitude(contexteSauvegarde.characterId, contexteSauvegarde.doctrine.hash);
+          if (cleAptitude && !chargementsAptitudes[cleAptitude]) {
+            message.textContent = "Attends la fin du chargement des aspects, fragments et capacités avant d’enregistrer ce build.";
+            return;
+          }
           sauvegardes.push({
             nom: nom.trim(),
             pieces: resultat.choix.map(function (c) { return Object.assign({}, c.piece, { mods: c.modPlan || [] }); }),
