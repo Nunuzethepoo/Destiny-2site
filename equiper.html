@@ -5,14 +5,27 @@
   <title>Équiper un set</title>
   <style>
     body { font-family: sans-serif; padding: 20px; }
-    pre { background: #f3f3f3; padding: 10px; white-space: pre-wrap; }
-    .set { margin: 10px 0; }
+    pre { background: #101720; padding: 12px; white-space: pre-wrap; border: 1px solid #344251; border-radius: 3px; color: #d7e0e8; }
+    .set { display: grid; gap: 12px; margin: 14px 0; padding: 16px; border: 1px solid #344251; border-radius: 4px; background: #111820; }
+    .set-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .set-actions button, .editor-actions button { min-height: 38px; padding: 8px 12px; border: 1px solid #b9975d; border-radius: 3px; background: #d4ad680d; color: #e3c58e; font-weight: 700; cursor: pointer; }
+    .set-actions button:hover, .editor-actions button:hover { background: #d4ad6822; }
+    .set-editor { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; padding: 14px; border: 1px solid #344251; background: #0a1016; }
+    .set-editor[hidden] { display: none; }
+    .edit-field { display: grid; gap: 6px; color: #aebbc7; font-size: 11px; font-weight: 700; }
+    .edit-field select { width: 100%; min-height: 40px; padding: 8px; border: 1px solid #344251; border-radius: 3px; background: #111820; color: #edf1f4; }
+    .editor-help { grid-column: 1 / -1; margin: 0; color: #9eabb7; font-size: 11px; line-height: 1.6; }
+    .editor-actions { display: flex; gap: 8px; grid-column: 1 / -1; }
+    .editor-actions .cancel-edit { border-color: #526170; color: #bdc8d2; }
+    .set-summary { color: #d7e0e8; font-size: 13px; line-height: 1.6; }
+    .set-details { color: #adbac6; font-size: 11px; }
+    @media(max-width: 520px) { body { padding: 14px; } }
   </style>
   <link rel="stylesheet" href="vigie.css">
   <script src="vigie-shell.js" defer></script>
 </head>
 <body>
-  <h1>Équiper un set</h1>
+  <h1>Équiper un build</h1>
   <p id="statut">Chargement...</p>
 
   <p>Personnage cible :
@@ -37,9 +50,22 @@
     const zoneJournal = document.getElementById("journal");
 
     const CLASSES = { 0: "Titan", 1: "Chasseur", 2: "Arcaniste" };
+    const ARMURES = [
+      { bucket: 3448274439, nom: "Casque" },
+      { bucket: 3551918588, nom: "Gants" },
+      { bucket: 14239492, nom: "Torse" },
+      { bucket: 20886954, nom: "Jambes" },
+      { bucket: 1585787867, nom: "Objet de classe" }
+    ];
+    const ARMES = [
+      { bucket: 1498876634, nom: "Cinétique" },
+      { bucket: 2465295065, nom: "Énergie" },
+      { bucket: 953998645, nom: "Puissante" }
+    ];
 
     let compte = null;
     let personnages = {};
+    let objetsDisponibles = [];
     const sets = JSON.parse(localStorage.getItem("setsArmures")) || [];
 
     // ---------- Le journal ----------
@@ -220,9 +246,6 @@
         if (set.doctrine) {
           ecrire("Doctrine prévue : " + set.doctrine.nom + ". Vérifie ses aspects, fragments et capacités en jeu.");
         }
-        if (set.artefact && set.artefact.perks && set.artefact.perks.length) {
-          ecrire("Mods d’artefact prévus : " + set.artefact.perks.map(function (perk) { return perk.nom; }).join(", ") + ". Vérifie leur sélection en jeu.");
-        }
         ecrire(aEquiper.length || modsAppliques ? "Terminé : " + aEquiper.length + " objet(s) équipé(s), " + modsAppliques + " mod(s) appliqué(s)." : "Aucun changement nécessaire.");
       } catch (erreur) {
         ecrire("Erreur : " + erreur.message);
@@ -238,17 +261,17 @@
         return;
       }
 
-      for (const set of sets) {
+      sets.forEach(function (set, indexSet) {
         const bloc = document.createElement("div");
         bloc.className = "set";
 
         const objets = (set.pieces || []).concat(set.armes || []);
         const noms = objets.map(function (p) { return p.nom; }).join(", ");
         const texte = document.createElement("span");
+        texte.className = "set-summary";
         const detailsBuild = [];
         if (set.doctrine && set.doctrine.nom) detailsBuild.push("doctrine : " + set.doctrine.nom);
-        if (set.artefact && set.artefact.perks && set.artefact.perks.length) detailsBuild.push("artefact : " + set.artefact.perks.length + " mods");
-        texte.textContent = set.nom + " (" + noms + ")" + (detailsBuild.length ? " · " + detailsBuild.join(" · ") : "") + " ";
+        texte.textContent = set.nom + " — " + (noms || "aucun équipement") + (detailsBuild.length ? " · " + detailsBuild.join(" · ") : "");
 
         const bouton = document.createElement("button");
         bouton.textContent = "Équiper ce set";
@@ -264,9 +287,203 @@
           }
         });
 
+        const boutonModifier = document.createElement("button");
+        boutonModifier.textContent = "Modifier l’équipement";
+        const editeur = document.createElement("section");
+        editeur.className = "set-editor";
+        editeur.hidden = true;
+        boutonModifier.addEventListener("click", function () {
+          editeur.hidden = !editeur.hidden;
+          boutonModifier.textContent = editeur.hidden ? "Modifier l’équipement" : "Fermer la modification";
+        });
+        construireEditeur(set, editeur, indexSet);
+
+        const actions = document.createElement("div");
+        actions.className = "set-actions";
+        actions.append(bouton, boutonModifier);
         bloc.appendChild(texte);
-        bloc.appendChild(bouton);
+        const details = document.createElement("span");
+        details.className = "set-details";
+        details.textContent = "Classe : " + (CLASSES[classeDuSet(set)] || "inconnue");
+        bloc.append(actions, editeur, details);
         zoneSets.appendChild(bloc);
+      });
+    }
+
+    function classeDuSet(set) {
+      if (set.classe !== undefined) return Number(set.classe);
+      const piece = (set.pieces || []).find(function (objet) { return objet.classe !== undefined; });
+      return piece ? Number(piece.classe) : -1;
+    }
+
+    function classeCompatible(objet, classe) {
+      return objet.classe === undefined || Number(objet.classe) === -1 || Number(objet.classe) === 3 || Number(objet.classe) === Number(classe);
+    }
+
+    function equipementPourEmplacement(objets, emplacement) {
+      return objets.find(function (objet) {
+        return Number(objet.bucketHash) === Number(emplacement.bucket) || objet.emplacement === emplacement.nom;
+      });
+    }
+
+    function labelObjet(objet) {
+      return objet.nom + (objet.lieuLabel ? " · " + objet.lieuLabel : "");
+    }
+
+    function construireChamp(emplacement, courant, classe, type) {
+      const ligne = document.createElement("label");
+      ligne.className = "edit-field";
+      const nom = document.createElement("span");
+      nom.textContent = emplacement.nom;
+      const select = document.createElement("select");
+      select.dataset.bucket = String(emplacement.bucket);
+      select.dataset.type = type;
+      const compatibles = objetsDisponibles.filter(function (objet) {
+        return Number(objet.bucketHash) === Number(emplacement.bucket) && classeCompatible(objet, classe);
+      });
+      if (courant && !compatibles.some(function (objet) { return String(objet.idInstance) === String(courant.idInstance); })) {
+        compatibles.push(Object.assign({ lieuLabel: "Enregistré dans ce build" }, courant));
+      }
+      compatibles.sort(function (a, b) { return a.nom.localeCompare(b.nom, "fr"); });
+      const vide = document.createElement("option");
+      vide.value = "";
+      vide.textContent = type === "arme" && !courant ? "Aucune arme enregistrée" : "Choisir une pièce…";
+      select.appendChild(vide);
+      for (const objet of compatibles) {
+        if (!objet.idInstance) continue;
+        const option = document.createElement("option");
+        option.value = String(objet.idInstance);
+        option.textContent = labelObjet(objet);
+        select.appendChild(option);
+      }
+      if (courant && courant.idInstance) select.value = String(courant.idInstance);
+      ligne.append(nom, select);
+      return { ligne: ligne, select: select };
+    }
+
+    function construireEditeur(set, editeur, indexSet) {
+      const classe = classeDuSet(set);
+      const selectionsArmure = [];
+      const selectionsArmes = [];
+      for (const emplacement of ARMURES) {
+        const courant = equipementPourEmplacement(set.pieces || [], emplacement);
+        const champ = construireChamp(emplacement, courant, classe, "armure");
+        selectionsArmure.push({ emplacement: emplacement, courant: courant, select: champ.select });
+        editeur.appendChild(champ.ligne);
+      }
+      for (const emplacement of ARMES) {
+        const courant = equipementPourEmplacement(set.armes || [], emplacement);
+        const champ = construireChamp(emplacement, courant, classe, "arme");
+        selectionsArmes.push({ emplacement: emplacement, courant: courant, select: champ.select });
+        editeur.appendChild(champ.ligne);
+      }
+
+      const aide = document.createElement("p");
+      aide.className = "editor-help";
+      aide.textContent = "Choisis une autre pièce de ton coffre ou de tes personnages. Les mods d’armure déjà enregistrés sont gardés si tu conserves la pièce; une nouvelle pièce est ajoutée sans mods préconfigurés.";
+      editeur.appendChild(aide);
+      const actions = document.createElement("div");
+      actions.className = "editor-actions";
+      const enregistrer = document.createElement("button");
+      enregistrer.type = "button";
+      enregistrer.textContent = "Enregistrer l’équipement";
+      enregistrer.addEventListener("click", function () {
+        const nouvellesArmures = [];
+        for (const selection of selectionsArmure) {
+          const id = selection.select.value;
+          const piece = objetsDisponibles.find(function (objet) { return String(objet.idInstance) === id; }) || selection.courant;
+          if (!piece) {
+            alert("Choisis une pièce pour l’emplacement « " + selection.emplacement.nom + " ».");
+            return;
+          }
+          const resteIdentique = selection.courant && String(selection.courant.idInstance) === String(piece.idInstance);
+          nouvellesArmures.push(Object.assign({}, piece, {
+            emplacement: selection.emplacement.nom,
+            classe: piece.classe === undefined ? classe : piece.classe,
+            mods: resteIdentique ? (selection.courant.mods || []) : []
+          }));
+        }
+        if (nouvellesArmures.filter(function (piece) { return piece.exotique; }).length > 1) {
+          alert("Un build ne peut contenir qu’une seule armure exotique. Remplace l’une des deux pièces exotiques.");
+          return;
+        }
+        const nouvellesArmes = [];
+        for (const selection of selectionsArmes) {
+          const id = selection.select.value;
+          if (!id) {
+            if (selection.courant) nouvellesArmes.push(selection.courant);
+            continue;
+          }
+          const arme = objetsDisponibles.find(function (objet) { return String(objet.idInstance) === id; }) || selection.courant;
+          if (arme) nouvellesArmes.push(Object.assign({}, arme, { emplacement: selection.emplacement.nom }));
+        }
+        sets[indexSet].pieces = nouvellesArmures;
+        sets[indexSet].armes = nouvellesArmes;
+        localStorage.setItem("setsArmures", JSON.stringify(sets));
+        afficherSets();
+        statut.textContent = "Équipement modifié et enregistré sur cet appareil.";
+      });
+      const annuler = document.createElement("button");
+      annuler.type = "button";
+      annuler.className = "cancel-edit";
+      annuler.textContent = "Annuler";
+      annuler.addEventListener("click", function () { editeur.hidden = true; });
+      actions.append(enregistrer, annuler);
+      editeur.appendChild(actions);
+    }
+
+    async function chargerObjetsDisponibles(profil) {
+      const manifest = await appelerBungie("/Destiny2/Manifest/");
+      const chemins = manifest.jsonWorldComponentContentPaths.fr || manifest.jsonWorldComponentContentPaths.en;
+      const chemin = chemins.DestinyInventoryItemLiteDefinition || chemins.DestinyInventoryItemDefinition;
+      const reponse = await VIGIE_BUNGIE.fetchPublic(chemin);
+      if (!reponse.ok) throw new Error("Le manifeste des équipements Bungie n’a pas pu être chargé.");
+      const definitions = await reponse.json();
+      const lieux = trouverLieux(profil);
+      const sources = [];
+      function ajouter(liste, idPersonnage) {
+        for (const objet of liste || []) sources.push({ objet: objet, idPersonnage: idPersonnage || null });
+      }
+      if (profil.profileInventory && profil.profileInventory.data) ajouter(profil.profileInventory.data.items);
+      if (profil.characterInventories && profil.characterInventories.data) {
+        for (const id in profil.characterInventories.data) ajouter(profil.characterInventories.data[id].items, id);
+      }
+      if (profil.characterEquipment && profil.characterEquipment.data) {
+        for (const id in profil.characterEquipment.data) ajouter(profil.characterEquipment.data[id].items, id);
+      }
+
+      const vus = new Set();
+      objetsDisponibles = [];
+      for (const source of sources) {
+        const objet = source.objet;
+        if (!objet.itemInstanceId || vus.has(String(objet.itemInstanceId))) continue;
+        const definition = definitions[objet.itemHash];
+        const bucket = Number(definition && definition.inventory && definition.inventory.bucketTypeHash) || 0;
+        const emplacementArmure = ARMURES.find(function (slot) { return slot.bucket === bucket; });
+        const emplacementArme = ARMES.find(function (slot) { return slot.bucket === bucket; });
+        if (!emplacementArmure && !emplacementArme) continue;
+        vus.add(String(objet.itemInstanceId));
+        const emplacement = emplacementArmure || emplacementArme;
+        const lieu = lieux[objet.itemInstanceId];
+        const personnage = source.idPersonnage && personnages[source.idPersonnage];
+        let lieuLabel = "Emplacement inconnu";
+        if (lieu && lieu.zone === "coffre") lieuLabel = "Coffre";
+        else if (lieu && lieu.zone === "inventaire") lieuLabel = "Inventaire" + (personnage ? " de " + CLASSES[personnage.classType] : "");
+        else if (lieu && lieu.zone === "equipee") lieuLabel = "Équipé" + (personnage ? " sur " + CLASSES[personnage.classType] : "");
+        objetsDisponibles.push({
+          nom: definition && definition.displayProperties && definition.displayProperties.name || "Objet inconnu",
+          icone: definition && definition.displayProperties && definition.displayProperties.icon || "",
+          idInstance: objet.itemInstanceId,
+          hash: Number(objet.itemHash),
+          bucketHash: bucket,
+          emplacement: emplacement.nom,
+          classe: definition && definition.classType,
+          exotique: Boolean(emplacementArmure && definition.inventory && Number(definition.inventory.tierType) === 6),
+          setHash: Number(definition && definition.equippingBlock && definition.equippingBlock.equipableItemSetHash) || 0,
+          lieu: lieu && lieu.zone || "inconnu",
+          lieuLabel: lieuLabel,
+          idPersonnage: source.idPersonnage
+        });
       }
     }
 
@@ -290,9 +507,11 @@
           }) || memberships.destinyMemberships[0];
 
         const profil = await appelerBungie(
-          "/Destiny2/" + compte.membershipType + "/Profile/" + compte.membershipId + "/?components=200"
+          "/Destiny2/" + compte.membershipType + "/Profile/" + compte.membershipId + "/?components=102,200,201,205"
         );
         personnages = profil.characters.data;
+        statut.textContent = "Lecture de ton coffre et de tes équipements…";
+        await chargerObjetsDisponibles(profil);
 
         for (const id in personnages) {
           const option = document.createElement("option");
@@ -302,7 +521,7 @@
         }
 
         statut.textContent = "Connecté : " + compte.bungieGlobalDisplayName +
-          ". Fais ceci en orbite ou à la tour, pas pendant une activité.";
+          ". Modifie tes pièces puis équipe le build en orbite ou à la tour.";
         afficherSets();
       } catch (erreur) {
         statut.textContent = "Erreur : " + erreur.message;

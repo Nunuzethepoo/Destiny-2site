@@ -24,10 +24,6 @@
     .builder-subsection>p{margin:0;color:var(--muted);font-size:13px;line-height:1.6}
     .builder-subsection .builder-control{font-size:12px}
     .weapon-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
-    .artifact-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:7px}
-    .artifact-choice{display:flex;align-items:center;gap:8px;min-height:42px;padding:7px 9px;border:1px solid #27323e;border-radius:3px;background:#0a1016;color:#cbd4dc;font-size:12px;line-height:1.4}
-    .artifact-choice input{flex:0 0 auto;accent-color:var(--gold)}
-    .artifact-choice img{width:27px;height:27px;object-fit:contain}
     .context-panel{padding:10px 12px;border:1px solid #344251;border-radius:3px;background:#0a1016;color:#cbd4dc;font-size:12px;line-height:1.6}
     .context-panel strong{color:#edf1f4}
     .stats-table{width:100%;border-collapse:separate;border-spacing:0 7px;table-layout:fixed}
@@ -109,12 +105,7 @@
             <label class="builder-control" for="armeLourde"><span>Puissante</span><select id="armeLourde"></select></label>
           </div>
         </div>
-        <div class="builder-subsection">
-          <h3>Mods de l’artefact saisonnier</h3>
-          <p id="artefactInfo" aria-live="polite">Lecture des mods de l’artefact…</p>
-          <div id="artefactMods" class="artifact-list"></div>
-        </div>
-        <p class="bonus-info">Les mods de statistiques sur les armures sont calculés automatiquement selon tes priorités, puis sauvegardés avec le build. Les choix de doctrine et d’artefact sont enregistrés comme plan à suivre en jeu.</p>
+        <p class="bonus-info">Les mods de statistiques sur les armures sont calculés automatiquement selon tes priorités, puis sauvegardés avec le build.</p>
       </div>
     </section>
 
@@ -149,8 +140,6 @@
     const choixBonus = document.getElementById("choixBonus");
     const bonusInfo = document.getElementById("bonusInfo");
     const doctrineInfo = document.getElementById("doctrineInfo");
-    const artefactInfo = document.getElementById("artefactInfo");
-    const zoneArtefactMods = document.getElementById("artefactMods");
     const tableStats = document.getElementById("tableStats");
     const zoneResultats = document.getElementById("resultats");
 
@@ -175,13 +164,11 @@
     let definitionsSets = {};
     let definitionsPerks = {};
     let definitionsLite = {};
-    let definitionsArtefacts = {};
     let optionsBonus = new Map();
     let toutesLesArmures = [];
     let toutesLesArmes = [];
     let profilActif = null;
     let plansDoctrine = {};
-    let plansArtefact = {};
     let socketParInstance = {};
     let definitionMods = {};
     let characterPlugSets = {};
@@ -205,7 +192,7 @@
     async function chargerDefinitions(hashesArmure, progression) {
       const manifest = await appelerBungie("/Destiny2/Manifest/");
       const chemins = manifest.jsonWorldComponentContentPaths[LANGUE];
-      let cache = { version: manifest.version, objets: {}, sets: {}, perks: {}, stats: null, artefacts: null };
+      let cache = { version: manifest.version, objets: {}, sets: {}, perks: {}, stats: null };
       try {
         const enCache = JSON.parse(localStorage.getItem("vigieBuildDefsCache"));
         if (enCache && enCache.version === manifest.version) cache = enCache;
@@ -221,7 +208,6 @@
       }
 
       const stats = cache.stats || await lireFichier(chemins.DestinyStatDefinition);
-      const artefacts = cache.artefacts || await lireFichier(chemins.DestinyArtifactDefinition);
       // Le coffre regroupe plusieurs buckets de profil : bucketHash n'est pas
       // toujours l'emplacement normal de l'objet. Le manifeste Lite permet de
       // reconnaître les armures du coffre sans interroger chaque objet un par un.
@@ -324,11 +310,10 @@
           objets: objetsEnCache,
           sets: setsEnCache,
           perks: perksEnCache,
-          stats: stats,
-          artefacts: artefacts
+          stats: stats
         }));
       } catch (_) {}
-      return { objets: objets, objetsLite: objetsLite, stats: stats, sets: sets, perks: perks, artefacts: artefacts, nombreArmures: hashesArmureReels.length };
+      return { objets: objets, objetsLite: objetsLite, stats: stats, sets: sets, perks: perks, nombreArmures: hashesArmureReels.length };
     }
 
     function plugsPourSocket(socket, hashSet) {
@@ -627,8 +612,11 @@
         return { hash: Number(hash), definition: definition };
       }).filter(function (entree) {
         const definition = entree.definition;
-        return definition && definition.inventory && Number(definition.inventory.bucketTypeHash) === BUCKET_DOCTRINE &&
-          Number(definition.classType) === Number(choixClasse.value) && definition.displayProperties && definition.displayProperties.name;
+        const estSousClasse = Number(definition && definition.itemType) === 16 ||
+          Number(definition && definition.inventory && definition.inventory.bucketTypeHash) === BUCKET_DOCTRINE;
+        return definition && estSousClasse &&
+          (Number(definition.classType) === Number(choixClasse.value) || Number(definition.classType) === -1) &&
+          definition.displayProperties && definition.displayProperties.name;
       });
       if (hashActuel && !options.some(function (entree) { return entree.hash === hashActuel; })) {
         const definitionActuelle = definitionsLite[hashActuel];
@@ -656,13 +644,11 @@
       plansDoctrine[idPersonnage] = Number(choixDoctrine.value);
     }
 
-    function afficherDoctrineEtArtefact() {
+    function afficherDoctrine() {
       const idPersonnage = choixPersonnage.value;
       const personnage = profilActif && profilActif.characters && profilActif.characters.data && profilActif.characters.data[idPersonnage];
       if (!personnage) {
         doctrineInfo.textContent = "Aucun Gardien de cette classe n’a été trouvé.";
-        artefactInfo.textContent = "Aucun artefact disponible pour ce Gardien.";
-        zoneArtefactMods.innerHTML = "";
         return;
       }
 
@@ -684,72 +670,6 @@
           (nomsPrises.length ? " · configuration actuelle : " + nomsPrises.join(" · ") : "")
         : "Doctrine actuelle introuvable dans les données Bungie.";
 
-      const progression = profilActif.characterProgressions && profilActif.characterProgressions.data && profilActif.characterProgressions.data[idPersonnage];
-      const artefactActif = progression && progression.seasonalArtifact;
-      const artefactHash = Number(artefactActif && artefactActif.artifactHash) || Number(profilActif.profileProgression && profilActif.profileProgression.data && profilActif.profileProgression.data.seasonalArtifact && profilActif.profileProgression.data.seasonalArtifact.artifactHash);
-      const definitionArtefact = definitionsArtefacts[artefactHash];
-      const nomArtefact = definitionArtefact && definitionArtefact.displayProperties && definitionArtefact.displayProperties.name || "Artefact saisonnier";
-      const niveaux = artefactActif && artefactActif.tiers || [];
-      const choixDisponibles = [];
-      const choixActifs = [];
-      for (const niveau of niveaux) {
-        for (const mod of (niveau.items || [])) {
-          const hash = Number(mod.itemHash);
-          if (!hash || mod.isVisible === false) continue;
-          const definition = definitionsLite[hash];
-          const choix = {
-            hash: hash,
-            nom: definition && definition.displayProperties && definition.displayProperties.name || "Mod " + hash,
-            icone: definition && definition.displayProperties && definition.displayProperties.icon || "",
-            actif: Boolean(mod.isActive)
-          };
-          choixDisponibles.push(choix);
-          if (choix.actif) choixActifs.push(hash);
-        }
-      }
-
-      if (!artefactHash || !choixDisponibles.length) {
-        artefactInfo.textContent = "Les choix de l’artefact ne sont pas disponibles pour ce Gardien.";
-        zoneArtefactMods.innerHTML = "";
-        delete plansArtefact[idPersonnage];
-        return;
-      }
-
-      if (!Array.isArray(plansArtefact[idPersonnage])) plansArtefact[idPersonnage] = choixActifs;
-      const nombreMaximum = Math.max(Number(artefactActif && artefactActif.pointsUsed) || 0, choixActifs.length);
-      artefactInfo.textContent = nomArtefact + " · " + plansArtefact[idPersonnage].length + " choix pour " + nombreMaximum + " emplacement(s). Ces choix sont enregistrés avec le build; VIGIE ne les applique pas automatiquement en jeu.";
-      zoneArtefactMods.innerHTML = "";
-      for (const choix of choixDisponibles) {
-        const ligne = document.createElement("label");
-        ligne.className = "artifact-choice";
-        const caseMod = document.createElement("input");
-        caseMod.type = "checkbox";
-        caseMod.checked = plansArtefact[idPersonnage].indexOf(choix.hash) !== -1;
-        caseMod.setAttribute("aria-label", choix.nom);
-        caseMod.addEventListener("change", function () {
-          const plan = plansArtefact[idPersonnage] || [];
-          if (caseMod.checked && plan.length >= nombreMaximum) {
-            caseMod.checked = false;
-            artefactInfo.textContent = "Limite actuelle atteinte (" + nombreMaximum + "). Décoche un choix avant d’en sélectionner un autre.";
-            return;
-          }
-          plansArtefact[idPersonnage] = caseMod.checked
-            ? plan.concat([choix.hash])
-            : plan.filter(function (hash) { return Number(hash) !== choix.hash; });
-          afficherDoctrineEtArtefact();
-        });
-        ligne.appendChild(caseMod);
-        if (choix.icone) {
-          const image = document.createElement("img");
-          image.src = "https://www.bungie.net" + choix.icone;
-          image.alt = "";
-          ligne.appendChild(image);
-        }
-        const nom = document.createElement("span");
-        nom.textContent = choix.nom;
-        ligne.appendChild(nom);
-        zoneArtefactMods.appendChild(ligne);
-      }
     }
 
     function remplirPersonnages() {
@@ -765,7 +685,7 @@
       if (liste.some(function (personnage) { return personnage.id === anciensId; })) choixPersonnage.value = anciensId;
       remplirDoctrine();
       afficherArmes();
-      afficherDoctrineEtArtefact();
+      afficherDoctrine();
     }
 
     function afficherArmes() {
@@ -802,10 +722,6 @@
       const hashDoctrine = Number(choixDoctrine.value) || Number(doctrineEquipee && doctrineEquipee.itemHash) || 0;
       const objetDoctrine = doctrineEquipee && Number(doctrineEquipee.itemHash) === hashDoctrine ? doctrineEquipee : null;
       const definitionDoctrine = definitionsLite[hashDoctrine];
-      const progression = profilActif && profilActif.characterProgressions && profilActif.characterProgressions.data && profilActif.characterProgressions.data[choixPersonnage.value];
-      const artefact = progression && progression.seasonalArtifact;
-      const artefactHash = Number(artefact && artefact.artifactHash) || 0;
-      const definitionArtefact = definitionsArtefacts[artefactHash];
       const armes = [];
       for (const bucketHash of Object.keys(BUCKETS_ARMES)) {
         const id = document.getElementById(BUCKETS_ARMES[bucketHash].id).value;
@@ -830,11 +746,6 @@
           }
         }
       }
-      const planArtefact = plansArtefact[choixPersonnage.value] || [];
-      const perksArtefact = planArtefact.map(function (hash) {
-        const definition = definitionsLite[hash];
-        return { hash: Number(hash), nom: definition && definition.displayProperties && definition.displayProperties.name || "Mod " + hash, icone: definition && definition.displayProperties && definition.displayProperties.icon || "" };
-      });
       return {
         classe: Number(choixClasse.value),
         characterId: choixPersonnage.value || null,
@@ -846,20 +757,15 @@
           nom: definitionDoctrine && definitionDoctrine.displayProperties && definitionDoctrine.displayProperties.name || "Doctrine choisie",
           icone: definitionDoctrine && definitionDoctrine.displayProperties && definitionDoctrine.displayProperties.icon || "",
           plugs: plugs
-        } : null,
-        artefact: artefactHash ? {
-          hash: artefactHash,
-          nom: definitionArtefact && definitionArtefact.displayProperties && definitionArtefact.displayProperties.name || "Artefact saisonnier",
-          perks: perksArtefact
         } : null
       };
     }
 
     choixClasse.addEventListener("change", function () { majExotiques(); majBonus(); remplirPersonnages(); });
-    choixPersonnage.addEventListener("change", function () { remplirDoctrine(); afficherArmes(); afficherDoctrineEtArtefact(); });
+    choixPersonnage.addEventListener("change", function () { remplirDoctrine(); afficherArmes(); afficherDoctrine(); });
     choixDoctrine.addEventListener("change", function () {
       plansDoctrine[choixPersonnage.value] = Number(choixDoctrine.value) || 0;
-      afficherDoctrineEtArtefact();
+      afficherDoctrine();
     });
     choixBonus.addEventListener("change", afficherInfoBonus);
     document.getElementById("inclureCoffre").addEventListener("change", function () { majExotiques(); majBonus(); });
@@ -934,7 +840,7 @@
           piece.capaciteEnergie = Number(energie && energie.energyCapacity) || 10;
         }
         composantsModsCharges = true;
-        afficherDoctrineEtArtefact();
+        afficherDoctrine();
       }
 
       const hashesMods = [];
@@ -1160,13 +1066,6 @@
             (contexte.doctrine.plugs.length ? " · " + contexte.doctrine.plugs.map(function (plug) { return plug.nom; }).join(" / ") : "");
           bloc.appendChild(doctrine);
         }
-        if (contexte.artefact) {
-          const artefact = document.createElement("p");
-          artefact.className = "bonus-result";
-          artefact.textContent = contexte.artefact.nom + " : " +
-            (contexte.artefact.perks.length ? contexte.artefact.perks.map(function (perk) { return perk.nom; }).join(" / ") : "aucun mod sélectionné");
-          bloc.appendChild(artefact);
-        }
 
         // Afficher les six valeurs même si une définition de nom manque.
         const nomsStatsSecours = ["Mobilité", "Résistance", "Récupération", "Discipline", "Intellect", "Force"];
@@ -1223,7 +1122,6 @@
             classe: contexte.classe,
             armes: contexte.armes,
             doctrine: contexte.doctrine,
-            artefact: contexte.artefact,
             bonus: bonusChoisi ? {
               setHash: bonusChoisi.setHash,
               requiredCount: bonusChoisi.requiredCount,
@@ -1274,7 +1172,7 @@
         statut.textContent = "Chargement de ton inventaire...";
         const profil = await appelerBungie(
           "/Destiny2/" + compte.membershipType + "/Profile/" + compte.membershipId +
-          "/?components=102,104,200,201,202,205,304"
+          "/?components=102,200,201,205,304"
         );
         profilActif = profil;
 
@@ -1314,7 +1212,6 @@
         definitionsSets = definitions.sets;
         definitionsPerks = definitions.perks;
         definitionsLite = definitions.objetsLite || {};
-        definitionsArtefacts = definitions.artefacts || {};
 
         for (const element of objets) {
           const definition = definitions.objets[element.objet.itemHash] || definitionsLite[element.objet.itemHash];
