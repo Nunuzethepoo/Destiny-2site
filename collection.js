@@ -4,7 +4,8 @@
   const SKIP_TABS = new Set(["Shopping List", "Archetypes", "Experimental", "Exotic Armor", "Builds", "Perks", "Origin Traits", "Set Bonuses", "Artifact Mods", "Fragments", "Aspects", "Subclasses", "Encounters", "Transitions", "Raid Mods"]);
   const BUCKETS_ARMES = new Set([1498876634, 2465295065, 953998645]);
   const TTL = 30 * 60 * 1000;
-  const CACHE_KEY = "vigieCollectionGodRollsV2";
+  const CACHE_KEY = "vigieCollectionGodRollsV3";
+  const CACHE_KEY_LEGACY = "vigieCollectionGodRollsV2";
   const PAGE_SIZE = 60;
   const el = {
     status: document.getElementById("collectionStatus"),
@@ -141,8 +142,11 @@
     if (!manifestResponse.ok || manifestData.ErrorStatus !== "Success") throw new Error(manifestData.Message || "Le manifeste Bungie est indisponible.");
     const manifest = manifestData.Response;
     const type = "DestinyInventoryItemLiteDefinition";
-    const pathEn = manifest.jsonWorldComponentContentPaths.en[type] || manifest.jsonWorldComponentContentPaths.en.DestinyInventoryItemDefinition;
-    const pathFr = manifest.jsonWorldComponentContentPaths.fr && (manifest.jsonWorldComponentContentPaths.fr[type] || manifest.jsonWorldComponentContentPaths.fr.DestinyInventoryItemDefinition);
+    const cheminsManifest = manifest.jsonWorldComponentContentPaths || {};
+    const cheminsEn = cheminsManifest.en || {};
+    const cheminsFr = cheminsManifest.fr || {};
+    const pathEn = cheminsEn[type] || cheminsEn.DestinyInventoryItemDefinition;
+    const pathFr = cheminsFr[type] || cheminsFr.DestinyInventoryItemDefinition;
     if (!pathEn) throw new Error("Bungie n’a pas renvoyé le catalogue des armes.");
     async function chargerDefinitions(path) {
       const response = await VIGIE_BUNGIE.fetchPublic(path);
@@ -205,6 +209,29 @@
       });
       return weapon;
     });
+  }
+
+  function catalogueDepuisRolls(recommendations) {
+    const parNom = new Map();
+    recommendations.forEach(function (recommendation) {
+      const key = normalize(recommendation.name);
+      if (!key || parNom.has(key)) return;
+      parNom.set(key, {
+        hash: 0,
+        nameEn: recommendation.name,
+        name: recommendation.name,
+        icon: "",
+        type: TYPE_FR[recommendation.tab] || recommendation.tab || "Arme recommandée",
+        exotic: Boolean(recommendation.exotic)
+      });
+    });
+    return Array.from(parNom.values());
+  }
+
+  function afficherToutSiAucunRoll() {
+    if (!weapons.some(function (weapon) { return weapon.rolls && weapon.rolls.length; })) {
+      el.onlyRecommended.checked = false;
+    }
   }
 
   function garderTraductionsUtiles(recommendations, toutesLesTraductions) {
@@ -273,33 +300,48 @@
 
   async function init() {
     try {
-      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-      if (cached && Date.now() - cached.savedAt < TTL && Array.isArray(cached.catalog) && Array.isArray(cached.recommendations)) {
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || localStorage.getItem(CACHE_KEY_LEGACY) || "null");
+      if (cached && Date.now() - cached.savedAt < TTL && Array.isArray(cached.catalog) && cached.catalog.length && Array.isArray(cached.recommendations)) {
         traductionsPerks = cached.perkTranslations || {};
         weapons = addRecommendations(cached.catalog, cached.recommendations, traductionsPerks);
+        afficherToutSiAucunRoll();
         el.status.textContent = "Catalogue en cache · mise à jour des recommandations dans " + Math.max(1, Math.round((TTL - (Date.now() - cached.savedAt)) / 60000)) + " min.";
         fillTypes(); render();
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify(cached)); } catch (_) {}
         return;
       }
     } catch (_) {}
 
     el.status.textContent = "Chargement du catalogue Bungie et de la liste de rolls PvE…";
     const results = await Promise.allSettled([loadGameWeapons(), loadRecommendations()]);
-    const catalog = results[0].status === "fulfilled" ? results[0].value : [];
+    let catalog = results[0].status === "fulfilled" ? results[0].value : [];
     const recommendations = results[1].status === "fulfilled" ? results[1].value : [];
+    const catalogueSecours = !catalog.length && recommendations.length > 0;
+    if (catalogueSecours) catalog = catalogueDepuisRolls(recommendations);
     if (!catalog.length && !recommendations.length) {
-      el.status.textContent = "Impossible de charger les données. Vérifie l’URL du Worker sur oauth.html et réessaie.";
+      const erreurCatalogue = results[0].status === "rejected" && results[0].reason
+        ? " Détail : " + (results[0].reason.message || String(results[0].reason))
+        : "";
+      el.status.textContent = "Impossible de charger les données. Vérifie l’URL du Worker sur oauth.html et réessaie." + erreurCatalogue;
       el.results.innerHTML = '<p class="weapon-empty">Le catalogue Bungie et la liste des god rolls sont indisponibles.</p>';
       return;
     }
     garderTraductionsUtiles(recommendations, traductionsPerks);
     weapons = addRecommendations(catalog, recommendations, traductionsPerks);
+    afficherToutSiAucunRoll();
+    if (catalogueSecours) el.onlyRecommended.checked = false;
     fillTypes(); render();
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), catalog: catalog, recommendations: recommendations, perkTranslations: traductionsPerks })); } catch (_) {}
+    if (!catalogueSecours && catalog.length) {
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), catalog: catalog, recommendations: recommendations, perkTranslations: traductionsPerks })); } catch (_) {}
+    }
     const avertissements = [];
     if (results[0].status === "rejected") avertissements.push("catalogue Bungie indisponible");
     if (results[1].status === "rejected") avertissements.push("liste communautaire indisponible");
-    el.status.textContent = avertissements.length ? avertissements.join(" · ") : catalog.length + " armes du catalogue Bungie · " + recommendations.length + " rolls PvE communautaires.";
+    el.status.textContent = catalogueSecours
+      ? catalog.length + " armes recommandées affichées en mode de secours. Vérifie l’URL du Worker dans Connexion Bungie pour restaurer le catalogue complet."
+      : avertissements.length
+        ? avertissements.join(" · ") + " · " + catalog.length + " arme(s) chargée(s)"
+        : catalog.length + " armes du catalogue Bungie · " + recommendations.length + " rolls PvE communautaires.";
   }
 
   el.search.addEventListener("input", function () { visibleLimit = PAGE_SIZE; render(); });

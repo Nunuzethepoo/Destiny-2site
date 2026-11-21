@@ -189,6 +189,55 @@
       await pause(400);
     }
 
+    function bucketPourObjet(objet) {
+      const emplacement = ARMES.concat(ARMURES).find(function (slot) { return slot.nom === objet.emplacement; });
+      return Number(objet.bucketHash) || (emplacement && emplacement.bucket) || 0;
+    }
+
+    async function libererObjetEquipe(piece, lieu, lieux) {
+      const idAncienPersonnage = lieu.idPerso;
+      const ancienPersonnage = personnages[idAncienPersonnage];
+      const bucket = bucketPourObjet(piece) || bucketPourObjet(objetsDisponibles.find(function (objet) {
+        return String(objet.idInstance) === String(piece.idInstance);
+      }) || {});
+      const remplacements = objetsDisponibles.map(function (objet) {
+        return { objet: objet, lieu: lieux[objet.idInstance] };
+      }).filter(function (entree) {
+        if (!entree.lieu || String(entree.objet.idInstance) === String(piece.idInstance)) return false;
+        if (Number(entree.objet.bucketHash) !== bucket || !classeCompatible(entree.objet, ancienPersonnage && ancienPersonnage.classType)) return false;
+        return (entree.lieu.zone === "inventaire" && entree.lieu.idPerso === idAncienPersonnage) || entree.lieu.zone === "coffre";
+      }).sort(function (a, b) {
+        return Number(a.lieu.zone === "coffre") - Number(b.lieu.zone === "coffre");
+      });
+
+      if (!remplacements.length) {
+        ecrire(piece.nom + " : équipée sur un autre Gardien, et aucun objet de remplacement du même emplacement n’est disponible dans son inventaire ou le coffre.");
+        return false;
+      }
+
+      const remplacement = remplacements[0].objet;
+      const lieuRemplacement = lieux[remplacement.idInstance];
+      ecrire(piece.nom + " : remplacement temporaire de " + (CLASSES[ancienPersonnage && ancienPersonnage.classType] || "l’autre Gardien") + " par " + remplacement.nom + "...");
+      if (lieuRemplacement.zone === "coffre") {
+        await transferer(remplacement, idAncienPersonnage, false);
+        lieuRemplacement.zone = "inventaire";
+        lieuRemplacement.idPerso = idAncienPersonnage;
+      }
+      await envoyerBungie("/Destiny2/Actions/Items/EquipItems/", {
+        itemIds: [remplacement.idInstance],
+        characterId: idAncienPersonnage,
+        membershipType: compte.membershipType
+      });
+      await pause(500);
+      lieuRemplacement.zone = "equipee";
+      lieuRemplacement.idPerso = idAncienPersonnage;
+      await transferer(piece, idAncienPersonnage, true);
+      lieu.zone = "coffre";
+      lieu.idPerso = null;
+      ecrire(piece.nom + " : déplacée au coffre après le remplacement.");
+      return true;
+    }
+
     // ---------- Équiper un set ----------
     async function equiperSet(set, idPersonnage) {
       viderJournal();
@@ -225,9 +274,8 @@
               continue;
             }
             if (lieu.zone === "equipee") {
-              ecrire(piece.nom + " : équipée sur un autre personnage. " +
-                     "Déséquipe-la d'abord dans le jeu (cas pas encore géré).");
-              continue;
+              const liberee = await libererObjetEquipe(piece, lieu, lieux);
+              if (!liberee) continue;
             }
 
             if (lieu.zone === "inventaire" && lieu.idPerso !== idPersonnage) {
