@@ -717,7 +717,7 @@
 
       if (!Array.isArray(plansArtefact[idPersonnage])) plansArtefact[idPersonnage] = choixActifs;
       const nombreMaximum = Math.max(Number(artefactActif && artefactActif.pointsUsed) || 0, choixActifs.length);
-      artefactInfo.textContent = nomArtefact + " · " + plansArtefact[idPersonnage].length + " choix pour " + nombreMaximum + " emplacement(s). Ces choix sont enregistrés avec le build; Bungie ne permet pas de les modifier par VIGIE.";
+      artefactInfo.textContent = nomArtefact + " · " + plansArtefact[idPersonnage].length + " choix pour " + nombreMaximum + " emplacement(s). Ces choix sont enregistrés avec le build; VIGIE ne les applique pas automatiquement en jeu.";
       zoneArtefactMods.innerHTML = "";
       for (const choix of choixDisponibles) {
         const ligne = document.createElement("label");
