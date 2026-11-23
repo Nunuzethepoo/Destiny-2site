@@ -4,7 +4,7 @@
   const SKIP_TABS = new Set(["Shopping List", "Archetypes", "Experimental", "Exotic Armor", "Builds", "Perks", "Origin Traits", "Set Bonuses", "Artifact Mods", "Fragments", "Aspects", "Subclasses", "Encounters", "Transitions", "Raid Mods"]);
   const BUCKETS_ARMES = new Set([1498876634, 2465295065, 953998645]);
   const TTL = 30 * 60 * 1000;
-  const CACHE_KEY = "vigieCollectionGodRollsV5";
+  const CACHE_KEY = "vigieCollectionGodRollsV6";
   const PAGE_SIZE = 60;
   const el = {
     status: document.getElementById("collectionStatus"),
@@ -199,18 +199,24 @@
       if (!parNomAnglais[englishKey]) parNomAnglais[englishKey] = nomFr.trim();
     });
     traductionsPerks = parNomAnglais;
-    return Object.values(defsEn).filter(function (definition) {
-      return definition && definition.itemType === 3 && definition.inventory && BUCKETS_ARMES.has(Number(definition.inventory.bucketTypeHash)) && definition.displayProperties && definition.displayProperties.name && !definition.redacted;
-    }).map(function (definition) {
+    return Object.keys(defsEn).map(function (hash) {
+      return { hash: hash, definition: defsEn[hash] };
+    }).filter(function (entry) {
+      const definition = entry.definition;
+      return definition && definition.itemType === 3 && definition.inventory &&
+        BUCKETS_ARMES.has(Number(definition.inventory.bucketTypeHash)) &&
+        definition.displayProperties && definition.displayProperties.name && !definition.redacted;
+    }).map(function (entry) {
+      const definition = entry.definition;
       return {
-        hash: Number(definition.hash),
+        hash: Number(entry.hash),
         nameEn: definition.displayProperties.name,
-        name: nomsParHash[String(definition.hash)] || definition.displayProperties.name,
+        name: nomsParHash[entry.hash] || definition.displayProperties.name,
         icon: definition.displayProperties.icon || "",
         type: TYPE_FR[definition.itemTypeDisplayName] || definition.itemTypeDisplayName || "Arme",
         exotic: Number(definition.inventory.tierType) === 6
       };
-    }).sort(function (a, b) { return a.name.localeCompare(b.name, "en"); });
+    }).sort(function (a, b) { return a.name.localeCompare(b.name, "fr"); });
   }
 
   function addRecommendations(catalog, recommendations, translations) {
