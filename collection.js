@@ -4,13 +4,14 @@
   const SKIP_TABS = new Set(["Shopping List", "Archetypes", "Experimental", "Exotic Armor", "Builds", "Perks", "Origin Traits", "Set Bonuses", "Artifact Mods", "Fragments", "Aspects", "Subclasses", "Encounters", "Transitions", "Raid Mods"]);
   const BUCKETS_ARMES = new Set([1498876634, 2465295065, 953998645]);
   const TTL = 30 * 60 * 1000;
-  const CACHE_KEY = "vigieCollectionGodRollsV6";
+  const CACHE_KEY = "vigieCollectionGodRollsV7";
   const PAGE_SIZE = 60;
   const el = {
     status: document.getElementById("collectionStatus"),
     search: document.getElementById("collectionSearch"),
     type: document.getElementById("collectionType"),
     perk: document.getElementById("collectionPerk"),
+    tier: document.getElementById("collectionTier"),
     onlyRecommended: document.getElementById("recommendedOnly"),
     count: document.getElementById("collectionCount"),
     results: document.getElementById("collectionResults"),
@@ -42,6 +43,7 @@
     "Rocket Launcher": "Lance-roquettes", "Machine Gun": "Mitrailleuse", "Sword": "Épée",
     "Linear Fusion Rifle": "Fusil à fusion linéaire", "Glaive": "Glaive"
   };
+  const TIER_FR = { 1: "Monnaie", 2: "Basique", 3: "Commun", 4: "Rare", 5: "Légendaire", 6: "Exotique" };
   const COL_FR = { "Barrel": "Canon", "Mag": "Chargeur", "Perk 1": "Trait · colonne 1", "Perk 2": "Trait · colonne 2", "Origin Trait": "Trait d’origine" };
   let traductionsPerks = {};
 
@@ -214,6 +216,8 @@
         name: nomsParHash[entry.hash] || definition.displayProperties.name,
         icon: definition.displayProperties.icon || "",
         type: TYPE_FR[definition.itemTypeDisplayName] || definition.itemTypeDisplayName || "Arme",
+        tierType: Number(definition.inventory.tierType) || 0,
+        tier: TIER_FR[Number(definition.inventory.tierType)] || "Inconnu",
         exotic: Number(definition.inventory.tierType) === 6
       };
     }).sort(function (a, b) { return a.name.localeCompare(b.name, "fr"); });
@@ -259,6 +263,8 @@
         name: recommendation.name,
         icon: "",
         type: TYPE_FR[recommendation.tab] || recommendation.tab || "Arme recommandée",
+        tierType: recommendation.exotic ? 6 : 5,
+        tier: recommendation.exotic ? "Exotique" : "Légendaire",
         exotic: Boolean(recommendation.exotic)
       });
     });
@@ -300,10 +306,12 @@
   function render() {
     const query = normalize(el.search.value);
     const type = el.type.value;
+    const tier = el.tier.value;
     const selectedPerk = el.perk.value;
     const onlyRecommended = el.onlyRecommended.checked;
     const filtered = weapons.filter(function (weapon) {
       if (type && weapon.type !== type) return false;
+      if (tier && String(weapon.tierType) !== tier) return false;
       if (onlyRecommended && !weapon.rolls.length) return false;
       if (selectedPerk && !(weapon.rolls || []).some(function (roll) {
         return (roll.perks || []).some(function (perk) {
@@ -327,7 +335,7 @@
         const rolls = weapon.rolls.slice(0, 2).map(rollMarkup).join("");
         const more = weapon.rolls.length > 2 ? '<div class="roll-more">+' + (weapon.rolls.length - 2) + ' autre(s) roll(s) recommandé(s)</div>' : "";
         const badge = weapon.rolls.length ? '<span class="weapon-badge">God roll PvE</span>' : (weapon.exotic ? '<span class="weapon-badge exotic">Exotique</span>' : "");
-        return '<article class="weapon-card">' + icon + '<div class="weapon-copy"><div class="weapon-title"><h2>' + escapeHtml(weapon.name) + '</h2>' + badge + '</div><div class="weapon-meta">' + escapeHtml(weapon.type) + ' · ' + (weapon.exotic ? "Exotique" : "Arme légendaire") + '</div>' + (rolls || '<div class="roll-more">Aucune recommandation PvE trouvée dans la liste Aegis.</div>') + more + '</div></article>';
+        return '<article class="weapon-card">' + icon + '<div class="weapon-copy"><div class="weapon-title"><h2>' + escapeHtml(weapon.name) + '</h2>' + badge + '</div><div class="weapon-meta">' + escapeHtml(weapon.type) + ' · ' + (weapon.tier || (weapon.exotic ? "Exotique" : "Légendaire")) + '</div>' + (rolls || '<div class="roll-more">Aucune recommandation PvE trouvée dans la liste Aegis.</div>') + more + '</div></article>';
       }).join("");
     }
     el.more.hidden = filtered.length <= visibleLimit;
@@ -339,6 +347,18 @@
       const option = document.createElement("option");
       option.value = type; option.textContent = type;
       el.type.appendChild(option);
+    });
+  }
+
+  function fillTiers() {
+    const tiers = Array.from(new Set(weapons.map(function (weapon) {
+      return Number(weapon.tierType) || 0;
+    }).filter(function (tierType) { return tierType > 0 && TIER_FR[tierType]; }))).sort(function (a, b) { return b - a; });
+    tiers.forEach(function (tierType) {
+      const option = document.createElement("option");
+      option.value = String(tierType);
+      option.textContent = TIER_FR[tierType];
+      el.tier.appendChild(option);
     });
   }
 
@@ -379,7 +399,7 @@
         weapons = addRecommendations(cached.catalog, cached.recommendations, traductionsPerks);
         afficherToutSiAucunRoll();
         el.status.textContent = "Catalogue en cache · " + compteNomsFrancais(cached.catalog) + " nom(s) français distinct(s) · mise à jour dans " + Math.max(1, Math.round((TTL - (Date.now() - cached.savedAt)) / 60000)) + " min.";
-        fillTypes(); fillPerks(); render();
+        fillTypes(); fillTiers(); fillPerks(); render();
         try { localStorage.setItem(CACHE_KEY, JSON.stringify(cached)); } catch (_) {}
         return;
       }
@@ -403,7 +423,7 @@
     weapons = addRecommendations(catalog, recommendations, traductionsPerks);
     afficherToutSiAucunRoll();
     if (catalogueSecours) el.onlyRecommended.checked = false;
-    fillTypes(); fillPerks(); render();
+    fillTypes(); fillTiers(); fillPerks(); render();
     if (!catalogueSecours && catalog.length) {
       try { localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), catalog: catalog, recommendations: recommendations, perkTranslations: traductionsPerks })); } catch (_) {}
     }
@@ -420,6 +440,7 @@
   el.search.addEventListener("input", function () { visibleLimit = PAGE_SIZE; render(); });
   el.type.addEventListener("change", function () { visibleLimit = PAGE_SIZE; render(); });
   el.perk.addEventListener("change", function () { visibleLimit = PAGE_SIZE; render(); });
+  el.tier.addEventListener("change", function () { visibleLimit = PAGE_SIZE; render(); });
   el.onlyRecommended.addEventListener("change", function () { visibleLimit = PAGE_SIZE; render(); });
   el.more.addEventListener("click", function () { visibleLimit += PAGE_SIZE; render(); });
   init().catch(function (error) {
