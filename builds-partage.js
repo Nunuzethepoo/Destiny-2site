@@ -238,9 +238,68 @@
     builds.slice().reverse().forEach(function (item) {
       liste.appendChild(rendreBuild(preparerBuild(item.build), {
         shareButton: true,
+        preview: true,
         removeSharedId: item.id
       }));
     });
+  }
+
+  function creerImageSynthese(build) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200; canvas.height = 675;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+    const couleurClasse = ["#d98168", "#78c1d8", "#d5b56c"][Number(build.classId)] || "#8bd8dc";
+    const fond = ctx.createLinearGradient(0, 0, 1200, 675);
+    fond.addColorStop(0, "#1b2834"); fond.addColorStop(0.55, "#101820"); fond.addColorStop(1, "#090e13");
+    ctx.fillStyle = fond; ctx.fillRect(0, 0, 1200, 675);
+    ctx.fillStyle = "#0b1117"; ctx.fillRect(12, 12, 1176, 651);
+    ctx.strokeStyle = "#8bd8dc70"; ctx.strokeRect(12.5, 12.5, 1175, 650);
+    ctx.textBaseline = "top";
+    function texte(value, x, y, font, color, largeur) {
+      ctx.font = font; ctx.fillStyle = color;
+      ctx.fillText(String(value == null ? "" : value), x, y, largeur);
+    }
+    ctx.fillStyle = "#8bd8dc"; ctx.fillRect(48, 44, 5, 95);
+    texte("VIGIE  /  BUILD DU GARDIEN", 68, 41, "700 17px Arial", "#8bd8dc", 720);
+    ctx.fillStyle = couleurClasse; ctx.fillRect(68, 72, 150, 27);
+    texte(build.className.toUpperCase(), 78, 78, "700 14px Arial", "#10161c", 132);
+    texte(build.name || "Build du Gardien", 68, 109, "700 42px Arial", "#f1f4f7", 820);
+    texte((build.doctrine ? build.doctrine.name : "Doctrine non renseignée") + "  ·  " + build.className, 68, 161, "600 19px Arial", "#aebbc7", 810);
+    ctx.fillStyle = "#111a22"; ctx.fillRect(980, 45, 164, 92);
+    ctx.strokeStyle = "#c99f5b99"; ctx.strokeRect(980.5, 45.5, 163, 91);
+    texte("PUISSANCE", 997, 59, "700 12px Arial", "#c99f5b", 130);
+    texte(build.power ? String(build.power) : "VIGIE", 997, 83, "700 30px Arial", "#f0dfbd", 130);
+
+    texte("ÉQUIPEMENT", 48, 207, "700 14px Arial", "#c99f5b", 690);
+    const equipements = (build.weapons || []).concat(build.armor || []);
+    const largeurCarte = 224, hauteurCarte = 96, espace = 10;
+    equipements.slice(0, 8).forEach(function (item, index) {
+      const colonne = index % 3, ligne = Math.floor(index / 3);
+      const x = 48 + colonne * (largeurCarte + espace), y = 235 + ligne * (hauteurCarte + 10);
+      ctx.fillStyle = "#111a22"; ctx.fillRect(x, y, largeurCarte, hauteurCarte);
+      ctx.strokeStyle = item.exotic ? "#d5a748" : "#526171";
+      ctx.strokeRect(x + 0.5, y + 0.5, largeurCarte - 1, hauteurCarte - 1);
+      ctx.fillStyle = item.exotic ? "#d5a748" : "#8bd8dc"; ctx.fillRect(x, y, 3, hauteurCarte);
+      texte(String(item.slot || "Équipement").toUpperCase() + (item.exotic ? "  ·  EXO" : ""), x + 12, y + 12, "700 10px Arial", "#9aaab7", largeurCarte - 23);
+      texte(item.name || "Aucun équipement", x + 12, y + 37, "700 16px Arial", "#edf1f4", largeurCarte - 23);
+    });
+
+    texte("STATS", 774, 207, "700 14px Arial", "#c99f5b", 370);
+    STATS.forEach(function (nom, index) {
+      const y = 235 + index * 53, valeur = number((build.stats || [])[index]);
+      texte(nom.toUpperCase(), 774, y, "700 11px Arial", "#b5c0ca", 130);
+      ctx.fillStyle = "#25313c"; ctx.fillRect(904, y + 2, 175, 10);
+      ctx.fillStyle = couleurClasse; ctx.fillRect(904, y + 2, 175 * Math.max(0, Math.min(100, valeur)) / 100, 10);
+      texte(String(valeur), 1092, y - 5, "700 22px Arial", "#f0d8a6", 52);
+      texte("PALIER " + Math.floor(valeur / 10), 1092, y + 21, "600 9px Arial", "#7f8d9a", 64);
+    });
+    const bonus = build.bonus ? build.bonus.name + (build.bonus.count ? " · " + build.bonus.count + " pièces" : "") : "Aucun bonus de set sélectionné";
+    ctx.strokeStyle = "#ffffff22"; ctx.beginPath(); ctx.moveTo(48, 566); ctx.lineTo(1144, 566); ctx.stroke();
+    texte("BONUS DE SET", 48, 584, "700 11px Arial", "#c99f5b", 130);
+    texte(bonus, 162, 580, "600 15px Arial", "#d9e1e8", 650);
+    texte("IMAGE CLIQUABLE · FICHE DÉTAILLÉE", 842, 585, "700 11px Arial", "#8bd8dc", 302);
+    try { return canvas.toDataURL("image/png"); } catch (_) { return ""; }
   }
 
   function image(path, className, alt) {
@@ -464,6 +523,47 @@
       actions.appendChild(status);
       card.appendChild(actions);
     }
+
+    if (opts.preview) {
+      const synthese = creerImageSynthese(build);
+      const entree = document.createElement("div");
+      entree.className = "shared-build-entry";
+      const apercu = document.createElement("button");
+      apercu.type = "button"; apercu.className = "shared-build-preview";
+      apercu.setAttribute("aria-expanded", "false");
+      apercu.setAttribute("aria-label", "Afficher les détails du build " + build.name);
+      if (synthese) {
+        const imageApercu = document.createElement("img");
+        imageApercu.src = synthese;
+        imageApercu.alt = "Synthèse visuelle de " + build.name + ". Clique pour afficher le build complet.";
+        imageApercu.loading = "lazy";
+        apercu.appendChild(imageApercu);
+      }
+      const indice = document.createElement("span");
+      indice.className = "shared-preview-hint";
+      indice.textContent = "Cliquer pour afficher les détails";
+      apercu.appendChild(indice);
+      apercu.addEventListener("click", function () {
+        card.hidden = !card.hidden;
+        const ouvert = !card.hidden;
+        apercu.setAttribute("aria-expanded", String(ouvert));
+        indice.textContent = ouvert ? "Cliquer pour masquer les détails" : "Cliquer pour afficher les détails";
+        if (ouvert) card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      });
+      entree.appendChild(apercu);
+      if (synthese) {
+        const telecharger = document.createElement("a");
+        const nomFichier = String(build.name || "build").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "build";
+        telecharger.className = "shared-image-download";
+        telecharger.href = synthese;
+        telecharger.download = "VIGIE-" + nomFichier + ".png";
+        telecharger.textContent = "Télécharger l’image PNG";
+        entree.appendChild(telecharger);
+      }
+      card.hidden = true;
+      entree.appendChild(card);
+      return entree;
+    }
     return card;
   }
 
@@ -498,7 +598,7 @@
     if (lien) {
       try {
         const build = await decoder(location.hash);
-        sectionPartage.appendChild(rendreBuild(build, { shareButton: true }));
+        sectionPartage.appendChild(rendreBuild(build, { shareButton: true, preview: true }));
         document.getElementById("partageIntro").textContent = "Fiche de build autonome : équipement, stats, doctrine, aptitudes et bonus de set.";
       } catch (erreur) {
         message.hidden = false;
