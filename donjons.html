@@ -40,37 +40,14 @@
     .map-card h3{margin:0 0 4px;color:#e9edf0;font:700 18px 'Barlow Condensed';letter-spacing:.04em;text-transform:uppercase}
     .map-subtitle{margin:0 0 10px;color:#8e9ba9;font-size:10px;line-height:1.55}
     .map-frame{padding:5px;border:1px solid #ffffff17;background:#080d12}
-    .tactical-map{display:block;width:100%;height:auto;min-height:245px}
-    .map-ground{fill:#090e14}
-    .map-grid-line{fill:none;stroke:#26313b;stroke-width:1}
-    .map-room{fill:#18222b;stroke:#87929a;stroke-width:5;stroke-linejoin:round}
-    .map-room-inner{fill:none;stroke:#35424d;stroke-width:1}
-    .map-corridor{stroke:#202d37;stroke-linecap:round;stroke-linejoin:round}
-    .map-wall{stroke:#65737d;stroke-linecap:square}
-    .map-door{stroke:#72cccd;stroke-width:5;stroke-linecap:round}
-    .map-platform{fill:#202e38;stroke:#c19f68;stroke-width:2}
-    .map-platform-label{fill:#d7c59f;font:700 7px 'DM Sans',sans-serif;text-anchor:middle;letter-spacing:.5px}
-    .map-pillar{fill:#35434c;stroke:#9aa6aa;stroke-width:1.5}
-    .map-hazard{fill:#8a3c3b33;stroke:#cf716c;stroke-width:1.5;stroke-dasharray:5 3}
-    .map-pit{fill:#06090d;stroke:#a45651;stroke-width:3}
-    .map-mechanic-ring{fill:#c5a25c22;stroke:#d8b766;stroke-width:2;stroke-dasharray:4 3}
-    .map-link{stroke:#76d1cf;stroke-width:2.2;opacity:.88}
-    .map-link-alt{stroke:#e0b96e;stroke-width:1.7;stroke-dasharray:5 4;opacity:.9}
-    .map-leader{stroke:#b5c0c4;stroke-width:1;opacity:.78}
-    .map-label-bg{fill:#0a1017;stroke:#687783;stroke-width:1}
-    .map-marker-entry .map-label-bg{stroke:#66c3c9}
-    .map-marker-goal .map-label-bg{stroke:#d6b36e}
-    .map-marker-boss .map-label-bg,.map-marker-danger .map-label-bg{stroke:#dd8a7b}
-    .map-marker-safe .map-label-bg{stroke:#62c5a7}
-    .map-pin{fill:#d6b36e;stroke:#0a1017;stroke-width:2}
-    .map-marker-entry .map-pin{fill:#66c3c9}
-    .map-marker-boss .map-pin,.map-marker-danger .map-pin{fill:#dd8a7b}
-    .map-marker-safe .map-pin{fill:#62c5a7}
-    .map-label{fill:#f0f3f4;font:700 8.5px 'DM Sans',sans-serif}
-    .map-direction{fill:#93a2aa;font:700 8px 'DM Sans',sans-serif;letter-spacing:1.3px;text-anchor:middle}
-    .map-north{fill:#d4bd83}
-    .legend-dot{width:8px;height:8px;border:1px solid currentColor;border-radius:2px}
-    .legend-entry{color:#66c3c9}.legend-goal{color:#d6b36e}.legend-danger{color:#dd8a7b}.legend-safe{color:#62c5a7}
+    .room-photo-frame{overflow:hidden;border:1px solid #ffffff20;background:#070b10}
+    .room-photo-figure{margin:0}
+    .room-photo-link{display:block;min-height:190px;background:radial-gradient(ellipse at 50% 42%,#25343c,#080d12 76%);cursor:zoom-in}
+    .room-photo{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;color:#c5ced7}
+    .room-photo-error{display:grid;place-items:center;min-height:190px;padding:18px;color:#b5c0ca;font-size:12px}
+    .room-caption{padding:9px 11px;border-top:1px solid #ffffff16;color:#aab5c0;font-size:10px;line-height:1.5}
+    .room-source{color:var(--cyan);font-weight:700;text-decoration:none}
+    .room-source:hover{color:var(--gold)}
     .map-legend{display:flex;flex-wrap:wrap;gap:7px 12px;margin-top:9px;color:#aab5c0;font-size:9px}
     .map-legend span{display:flex;align-items:center;gap:5px}
     .legend-dot{width:8px;height:8px;border:1px solid currentColor;border-radius:2px}
@@ -93,7 +70,7 @@
 <body>
   <h1>Guides de donjons</h1>
   <p class="dungeon-intro">Les donjons se jouent de <strong>1 à 3 Gardiens</strong>. Choisis une activité puis une rencontre : VIGIE explique le but, chaque action dans l’ordre, le rôle des joueurs et quoi faire en cas d’erreur. La stratégie décrite correspond au déroulement normal ; vérifie les modificateurs affichés en jeu avant de partir.</p>
-  <p class="dungeon-callout"><strong>Orientation :</strong> dans un combat, « gauche » et « droite » signifient toujours gauche et droite quand tu regardes depuis le drapeau de ralliement vers le boss. Les schémas montrent l’empreinte de chaque salle, ses accès, plateformes, obstacles et points de mécanique. Les distances restent approximatives.</p>
+  <p class="dungeon-callout"><strong>Orientation :</strong> dans un combat, « gauche » et « droite » signifient toujours gauche et droite quand tu regardes depuis le drapeau de ralliement vers le boss. Chaque illustration est une capture de l’environnement réel visible en jeu, liée à la rencontre sélectionnée. Clique sur l’image pour l’ouvrir en grand ; sa source est indiquée dessous.</p>
   <section class="dungeon-toolbar" aria-label="Choisir un donjon et une rencontre">
     <label for="dungeonSearch">Rechercher un donjon<input id="dungeonSearch" type="search" placeholder="Ex. Prophétie, Vesper…"></label>
     <label for="dungeonSelect">Donjon<select id="dungeonSelect"></select></label>
@@ -117,6 +94,6 @@
       <article><b>Appel vocal</b><p>Annonce l’action et sa confirmation : « Je prends le buff », puis « déposé, c’est validé ». Ne devine pas un symbole ou une destination.</p></article>
     </div>
   </details>
-  <script src="donjons.js?v=20261123-2"></script>
+  <script src="donjons.js?v=20261123-3"></script>
 </body>
 </html>
