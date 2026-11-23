@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Guides de donjons Destiny 2 en français : stratégies débutants, étapes et schémas tactiques vus de dessus.">
+  <meta name="theme-color" content="#0a0d12">
+  <title>Guides de donjons — VIGIE</title>
+  <link rel="stylesheet" href="vigie.css">
+  <script src="vigie-shell.js" defer></script>
+  <style>
+    .dungeon-intro{max-width:850px;color:var(--muted);line-height:1.7}
+    .dungeon-intro strong{color:var(--white)}
+    .dungeon-callout{margin:16px 0;padding:12px 14px;border-left:2px solid var(--cyan);background:#8bd8dc0b;color:#c7d3dc;font-size:12px;line-height:1.65}
+    .dungeon-toolbar{display:grid;grid-template-columns:minmax(180px,1fr) minmax(180px,1fr) minmax(180px,1.2fr);gap:10px;margin:18px 0 12px;padding:14px;border:1px solid var(--line);background:linear-gradient(145deg,#141d27,#10161e)}
+    .dungeon-toolbar label{display:grid;gap:6px;color:#aeb9c5;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase}
+    .dungeon-toolbar select,.dungeon-toolbar input{width:100%;min-height:40px;padding:9px 10px;border:1px solid #344353;border-radius:3px;background:#0b1118;color:#eff3f6;font:500 12px 'DM Sans',sans-serif}
+    .dungeon-summary{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:20px 0 10px}
+    .dungeon-summary h2{margin:0;color:var(--gold);font:700 clamp(24px,4vw,36px) 'Barlow Condensed';letter-spacing:.04em;text-transform:uppercase}
+    .dungeon-summary p{max-width:760px;margin:6px 0 0;color:#b5c0ca;font-size:12px;line-height:1.65}
+    .dungeon-count{flex:none;padding:7px 10px;border:1px solid #c99f5b55;color:var(--gold);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+    .encounter-nav{display:flex;gap:7px;overflow-x:auto;padding:5px 0 13px}
+    .encounter-nav button{flex:none;padding:9px 11px;border:1px solid #344353;border-radius:3px;background:#111821;color:#c6d0d9;font:600 11px 'DM Sans',sans-serif;cursor:pointer}
+    .encounter-nav button[aria-pressed="true"]{border-color:var(--gold);background:#e6bb7215;color:var(--gold)}
+    .encounter-layout{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(330px,.9fr);gap:14px;align-items:start}
+    .encounter-card,.map-card{min-width:0;border:1px solid var(--line);border-radius:4px;background:linear-gradient(145deg,#141d27,#10161e);padding:17px}
+    .encounter-card h3{margin:0 0 7px;color:var(--gold);font:700 23px 'Barlow Condensed';letter-spacing:.04em;text-transform:uppercase}
+    .encounter-goal{margin:0;color:#e2e8ed;font-size:13px;line-height:1.7}
+    .encounter-team{margin:12px 0;padding:10px 11px;border:1px solid #8bd8dc22;background:#8bd8dc08;color:#c4d1d9;font-size:11px;line-height:1.65}
+    .encounter-team strong{color:var(--cyan);text-transform:uppercase;font-size:9px;letter-spacing:.08em}
+    .step-list{display:grid;gap:8px;margin:13px 0}
+    .step-card{display:grid;grid-template-columns:25px 1fr;gap:8px;padding:10px;border:1px solid #ffffff13;border-radius:3px;background:#0c1219}
+    .step-no{display:grid;place-items:center;width:23px;height:23px;border:1px solid #c99f5b66;border-radius:50%;color:var(--gold);font:700 11px 'Barlow Condensed'}
+    .step-card p{margin:1px 0;color:#d8dfe5;font-size:11px;line-height:1.7}
+    .recovery-box{margin-top:13px;padding:11px 12px;border-left:2px solid #d88576;background:#d885760d}
+    .recovery-box h4{margin:0 0 7px;color:#e6a18f;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+    .recovery-box p{margin:5px 0;color:#cbd3da;font-size:11px;line-height:1.65}
+    .map-card{position:sticky;top:16px}
+    .map-card h3{margin:0 0 4px;color:#e9edf0;font:700 18px 'Barlow Condensed';letter-spacing:.04em;text-transform:uppercase}
+    .map-subtitle{margin:0 0 10px;color:#8e9ba9;font-size:10px;line-height:1.55}
+    .map-frame{padding:5px;border:1px solid #ffffff17;background:#080d12}
+    .tactical-map{display:block;width:100%;height:auto;min-height:205px}
+    .map-zone{stroke-width:1.5}
+    .map-zone-entry{fill:#122229;stroke:#66c3c9}
+    .map-zone-room{fill:#151e28;stroke:#536171}
+    .map-zone-goal{fill:#2a2418;stroke:#d6b36e}
+    .map-zone-boss{fill:#2c1d1d;stroke:#dd8a7b}
+    .map-zone-safe{fill:#102725;stroke:#62c5a7}
+    .map-zone-danger{fill:#321e23;stroke:#dd7c78}
+    .map-label{fill:#e5ebef;font:700 10px 'DM Sans',sans-serif;text-anchor:middle}
+    .map-direction{fill:#8593a1;font:700 8px 'DM Sans',sans-serif;letter-spacing:1.3px;text-anchor:middle}
+    .map-link{stroke:#7bcbd0;stroke-width:2;opacity:.8}
+    .map-link-alt{stroke:#d6b36e;stroke-width:1.5;stroke-dasharray:5 4;opacity:.8}
+    .map-legend{display:flex;flex-wrap:wrap;gap:7px 12px;margin-top:9px;color:#aab5c0;font-size:9px}
+    .map-legend span{display:flex;align-items:center;gap:5px}
+    .legend-dot{width:8px;height:8px;border:1px solid currentColor;border-radius:2px}
+    .legend-entry{color:#66c3c9}.legend-goal{color:#d6b36e}.legend-danger{color:#dd8a7b}
+    .map-note{margin:8px 0 0;color:#7f8d9a;font-size:9px;line-height:1.55}
+    .guide-source{display:inline-flex;margin-top:12px;color:var(--cyan);font-size:10px;font-weight:700;text-decoration:none}
+    .guide-source:hover{color:var(--gold)}
+    .basics{margin:22px 0 30px;border:1px solid var(--line);background:#10161e}
+    .basics summary{padding:12px 14px;color:var(--gold);font:700 16px 'Barlow Condensed';letter-spacing:.05em;text-transform:uppercase;cursor:pointer}
+    .basics-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:0 12px 12px}
+    .basics-grid article{padding:10px;border:1px solid #ffffff12;background:#0c1219}
+    .basics-grid b{color:var(--cyan);font-size:10px}
+    .basics-grid p{margin:5px 0 0;color:#bbc6d0;font-size:10px;line-height:1.6}
+    .empty-state{padding:18px;border:1px solid var(--line);color:var(--muted)}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    @media(max-width:800px){.dungeon-toolbar{grid-template-columns:1fr 1fr}.dungeon-toolbar label:last-child{grid-column:1/-1}.encounter-layout{grid-template-columns:1fr}.map-card{position:static;order:-1}.basics-grid{grid-template-columns:1fr 1fr}}
+    @media(max-width:520px){.dungeon-toolbar{grid-template-columns:1fr}.dungeon-toolbar label:last-child{grid-column:auto}.dungeon-summary{align-items:flex-start;flex-direction:column}.basics-grid{grid-template-columns:1fr}.encounter-card,.map-card{padding:12px}}
+  </style>
+</head>
+<body>
+  <h1>Guides de donjons</h1>
+  <p class="dungeon-intro">Les donjons se jouent de <strong>1 à 3 Gardiens</strong>. Choisis une activité puis une rencontre : VIGIE explique le but, chaque action dans l’ordre, le rôle des joueurs et quoi faire en cas d’erreur. La stratégie décrite correspond au déroulement normal ; vérifie les modificateurs affichés en jeu avant de partir.</p>
+  <p class="dungeon-callout"><strong>Orientation :</strong> dans un combat, « gauche » et « droite » signifient toujours gauche et droite quand tu regardes depuis le drapeau de ralliement vers le boss. Les schémas sont des repères tactiques vus de dessus, simplifiés et sans échelle ; ils ne reproduisent pas exactement les salles.</p>
+  <section class="dungeon-toolbar" aria-label="Choisir un donjon et une rencontre">
+    <label for="dungeonSearch">Rechercher un donjon<input id="dungeonSearch" type="search" placeholder="Ex. Prophétie, Vesper…"></label>
+    <label for="dungeonSelect">Donjon<select id="dungeonSelect"></select></label>
+    <label for="encounterSelect">Rencontre ou étape<select id="encounterSelect"></select></label>
+  </section>
+  <div id="dungeonSummary" class="dungeon-summary"></div>
+  <nav id="encounterNav" class="encounter-nav" aria-label="Étapes du donjon"></nav>
+  <section class="encounter-layout" aria-live="polite">
+    <article id="encounterCard" class="encounter-card"></article>
+    <aside id="mapCard" class="map-card" aria-label="Schéma tactique vu de dessus"></aside>
+  </section>
+  <details class="basics">
+    <summary>Vocabulaire de départ : les mots à connaître avant le premier combat</summary>
+    <div class="basics-grid">
+      <article><b>Immunité</b><p>Le boss ne prend presque aucun dégât. Il faut d’abord réussir la mécanique de la salle pour faire tomber son bouclier.</p></article>
+      <article><b>Fenêtre de dégâts (DPS)</b><p>La courte période où le boss est vulnérable. Quand elle se termine, arrête de tirer et prépare le prochain cycle.</p></article>
+      <article><b>Buff / charge</b><p>Un effet temporaire ou un objet lumineux donné par un ennemi. Lis son nom et son compte à rebours ; dépose-le à l’endroit demandé.</p></article>
+      <article><b>Nettoyer / déposer</b><p>Rester dans un cercle jusqu’à ce qu’il change d’aspect, ou interagir avec une plaque. Attends la confirmation visuelle avant de partir.</p></article>
+      <article><b>Ajouter / adds</b><p>Les ennemis ordinaires qui gênent la mécanique. En les éliminant d’abord, tu rends le déplacement et le tir plus sûrs.</p></article>
+      <article><b>Appel vocal</b><p>Annonce l’action et sa confirmation : « Je prends le buff », puis « déposé, c’est validé ». Ne devine pas un symbole ou une destination.</p></article>
+    </div>
+  </details>
+  <script src="donjons.js?v=1"></script>
+</body>
+</html>
