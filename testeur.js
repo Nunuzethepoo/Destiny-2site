@@ -395,6 +395,9 @@
       row.update();
       return;
     }
+    row.inputs.rpm.dataset.manual = "";
+    row.inputs.magazine.dataset.manual = "";
+    row.inputs.reload.value = "";
     const imagePath = cheminIcone(item.icone);
     if (imagePath) {
       const img = document.createElement("img");
