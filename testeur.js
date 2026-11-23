@@ -380,8 +380,17 @@
       initialiserDetailPerk(row, index, null, null);
     });
     if (!item) {
-      row.weaponTitle.textContent = "Choisis une arme";
-      row.weaponMeta.textContent = "Tes armes Bungie apparaîtront ici.";
+      const placeholder = document.createElement("div");
+      const title = document.createElement("strong");
+      title.className = "weapon-title";
+      title.textContent = "Choisis une arme";
+      const meta = document.createElement("small");
+      meta.className = "weapon-meta";
+      meta.textContent = "Tes armes Bungie apparaîtront ici.";
+      placeholder.append(title, meta);
+      row.weaponSummary.appendChild(placeholder);
+      row.weaponTitle = title;
+      row.weaponMeta = meta;
       ["rpm", "magazine", "reloadStat"].forEach(function (key) { row.inputs[key].value = ""; });
       row.update();
       return;
@@ -401,6 +410,8 @@
     meta.textContent = item.emplacement + " · " + item.lieu + (item.nomPersonnage ? " · " + item.nomPersonnage : "");
     copy.append(title, meta);
     row.weaponSummary.appendChild(copy);
+    row.weaponTitle = title;
+    row.weaponMeta = meta;
     row.weaponTitle.textContent = item.nom;
     row.weaponMeta.textContent = item.perksActifs.length ? "Perks installés : " + item.perksActifs.join(" · ") : "Chargement des données d’arme…";
     afficherStatut("Lecture des sockets de " + item.nom + "…", "");
