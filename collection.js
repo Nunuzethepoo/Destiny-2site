@@ -11,6 +11,7 @@
     status: document.getElementById("collectionStatus"),
     search: document.getElementById("collectionSearch"),
     type: document.getElementById("collectionType"),
+    perk: document.getElementById("collectionPerk"),
     onlyRecommended: document.getElementById("recommendedOnly"),
     count: document.getElementById("collectionCount"),
     results: document.getElementById("collectionResults"),
@@ -263,10 +264,17 @@
   function render() {
     const query = normalize(el.search.value);
     const type = el.type.value;
+    const selectedPerk = el.perk.value;
     const onlyRecommended = el.onlyRecommended.checked;
     const filtered = weapons.filter(function (weapon) {
       if (type && weapon.type !== type) return false;
       if (onlyRecommended && !weapon.rolls.length) return false;
+      if (selectedPerk && !(weapon.rolls || []).some(function (roll) {
+        return (roll.perks || []).some(function (perk) {
+          const noms = (perk.optionsEn || []).concat(perk.options || []);
+          return noms.some(function (nom) { return normalize(nom) === selectedPerk; });
+        });
+      })) return false;
       if (!query) return true;
       const text = [weapon.name, weapon.nameEn, weapon.type, ...(weapon.rolls || []).flatMap(function (roll) {
         return [roll.tier, roll.rank, roll.notes, roll.variant, ...roll.perks.flatMap(function (perk) { return [perk.label, ...perk.options, ...(perk.optionsEn || [])]; })];
@@ -298,6 +306,35 @@
     });
   }
 
+  function fillPerks() {
+    const precedent = el.perk.value;
+    el.perk.innerHTML = "";
+    const tous = document.createElement("option");
+    tous.value = "";
+    tous.textContent = "Tous les perks";
+    el.perk.appendChild(tous);
+
+    const perks = new Map();
+    weapons.forEach(function (weapon) {
+      (weapon.rolls || []).forEach(function (roll) {
+        (roll.perks || []).forEach(function (perk) {
+          (perk.options || []).forEach(function (nom, index) {
+            const nomSource = (perk.optionsEn || [])[index] || nom;
+            const valeur = normalize(nomSource);
+            if (valeur && !perks.has(valeur)) perks.set(valeur, nom || nomSource);
+          });
+        });
+      });
+    });
+    Array.from(perks.entries()).sort(function (a, b) { return a[1].localeCompare(b[1], "fr"); }).forEach(function (entree) {
+      const option = document.createElement("option");
+      option.value = entree[0];
+      option.textContent = entree[1];
+      el.perk.appendChild(option);
+    });
+    if (perks.has(precedent)) el.perk.value = precedent;
+  }
+
   async function init() {
     try {
       const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || localStorage.getItem(CACHE_KEY_LEGACY) || "null");
@@ -306,7 +343,7 @@
         weapons = addRecommendations(cached.catalog, cached.recommendations, traductionsPerks);
         afficherToutSiAucunRoll();
         el.status.textContent = "Catalogue en cache · mise à jour des recommandations dans " + Math.max(1, Math.round((TTL - (Date.now() - cached.savedAt)) / 60000)) + " min.";
-        fillTypes(); render();
+        fillTypes(); fillPerks(); render();
         try { localStorage.setItem(CACHE_KEY, JSON.stringify(cached)); } catch (_) {}
         return;
       }
@@ -330,7 +367,7 @@
     weapons = addRecommendations(catalog, recommendations, traductionsPerks);
     afficherToutSiAucunRoll();
     if (catalogueSecours) el.onlyRecommended.checked = false;
-    fillTypes(); render();
+    fillTypes(); fillPerks(); render();
     if (!catalogueSecours && catalog.length) {
       try { localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), catalog: catalog, recommendations: recommendations, perkTranslations: traductionsPerks })); } catch (_) {}
     }
@@ -346,6 +383,7 @@
 
   el.search.addEventListener("input", function () { visibleLimit = PAGE_SIZE; render(); });
   el.type.addEventListener("change", function () { visibleLimit = PAGE_SIZE; render(); });
+  el.perk.addEventListener("change", function () { visibleLimit = PAGE_SIZE; render(); });
   el.onlyRecommended.addEventListener("change", function () { visibleLimit = PAGE_SIZE; render(); });
   el.more.addEventListener("click", function () { visibleLimit += PAGE_SIZE; render(); });
   init().catch(function (error) {

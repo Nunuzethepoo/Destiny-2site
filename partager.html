@@ -8,17 +8,32 @@
   <link rel="stylesheet" href="vigie.css">
   <script src="vigie-shell.js" defer></script>
   <style>
+    .share-hero{position:relative;overflow:hidden;margin:0 0 15px;padding:clamp(19px,3vw,28px);border:1px solid #384655;border-top:2px solid #8bd8dc88;background:radial-gradient(ellipse at 90% 0,#8bd8dc12,transparent 44%),linear-gradient(135deg,#18232e,#0d1319 70%);box-shadow:0 14px 35px #0003}
+    .share-eyebrow{display:block;margin-bottom:7px;color:var(--cyan);font-size:9px;font-weight:800;letter-spacing:.17em;text-transform:uppercase}
+    .share-hero h1{margin:0;color:#f3f5f6;font:700 clamp(27px,4vw,38px)/1 'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase}
     .share-intro{max-width:760px;color:var(--muted);font-size:12px;line-height:1.7}
-    .share-privacy{margin:14px 0 22px;padding:11px 13px;border:1px solid #8bd8dc35;background:#8bd8dc0a;color:#b8d9dc;font-size:10px;line-height:1.6}
+    .share-hero .share-intro{margin:9px 0 0;color:#aebbc7}
+    .share-hero-tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:15px}
+    .share-hero-tags span{padding:5px 8px;border:1px solid #ffffff15;background:#0910188c;color:#c2ccd5;font-size:9px;letter-spacing:.04em}
+    .share-privacy{display:flex;align-items:flex-start;gap:11px;margin:14px 0 22px;padding:13px 15px;border:1px solid #8bd8dc35;border-radius:4px;background:linear-gradient(120deg,#102026,#0d151b);color:#b8d9dc;font-size:11px;line-height:1.6}
+    .share-privacy-icon{display:grid;place-items:center;flex:0 0 30px;height:30px;border:1px solid #8bd8dc55;border-radius:50%;color:var(--cyan);font-size:15px}
+    .share-privacy p{margin:3px 0 0;color:#a9c5c8}
     .share-privacy strong{color:#d1f0f1}
-    .shared-build-card{margin:16px 0 22px;padding:clamp(12px,2vw,20px);border:1px solid #394653;border-top:2px solid var(--gold);border-radius:4px;background:linear-gradient(145deg,#18212b,#0d131a 68%);box-shadow:0 15px 32px #0004}
+    .share-section-heading{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:22px 0 10px;padding-bottom:9px;border-bottom:1px solid #ffffff16}
+    .share-section-heading h2{margin:3px 0 0;color:#eef1f3;font:700 21px 'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase}
+    .share-section-heading span{color:var(--gold);font-size:8px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+    .share-section-heading p{margin:0;color:var(--muted);font-size:10px;text-align:right}
+    #buildPartage:empty{display:none}
+    #buildsLocaux{display:grid;gap:14px}
+    .shared-build-card{margin:0 0 18px;padding:clamp(14px,2.4vw,22px);border:1px solid #394653;border-top:2px solid var(--gold);border-radius:5px;background:radial-gradient(ellipse at 100% 0,#c99f5b0b,transparent 38%),linear-gradient(145deg,#18212b,#0d131a 68%);box-shadow:0 15px 32px #0004}
     .shared-build-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid #ffffff15}
     .shared-class-tag{display:inline-flex;padding:4px 7px;border:1px solid #c99f5b77;color:#e3c58e;font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
     .shared-build-head h2{margin:6px 0 0;color:#f1f4f7;font:700 clamp(21px,3vw,29px)/1.1 'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase}
     .shared-subtitle{margin:4px 0 0;color:#97a5b2;font-size:10px}
     .shared-power{flex:0 0 auto;padding:8px 10px;border:1px solid #c99f5b55;color:#e9d4aa;font:700 11px ui-monospace,monospace;white-space:nowrap}
     .shared-equipment{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:7px;margin:13px 0}
-    .shared-gear-tile{min-width:0;padding:6px;border:1px solid #3b4652;background:linear-gradient(145deg,#1d2833,#0b1117)}
+    .shared-gear-tile{min-width:0;padding:7px;border:1px solid #3b4652;border-radius:3px;background:linear-gradient(145deg,#1d2833,#0b1117);transition:border-color .18s,transform .18s}
+    .shared-gear-tile:hover{border-color:#81909d;transform:translateY(-2px)}
     .shared-gear-tile.is-exotic{border-color:#d5a748;box-shadow:inset 0 0 0 1px #d5a74833}
     .shared-gear-icon{display:grid;place-items:center;aspect-ratio:1;margin-bottom:5px;border:1px solid #485665;background:#090e13;color:#cfb37d;font-size:19px}
     .shared-gear-icon img{display:block;width:100%;height:100%;object-fit:cover}
@@ -46,21 +61,30 @@
     .shared-bonus-name{display:block;color:#d7bd8b;font-size:11px;line-height:1.5}
     .shared-perks{display:grid;gap:4px;margin:7px 0 0;padding-left:15px;color:#aebbc7;font-size:9px;line-height:1.4}
     .shared-empty-note,.shared-empty-card{margin:0;padding:9px;border:1px solid #ffffff12;background:#101720;color:#97a5b2;font-size:10px;line-height:1.6}
-    .shared-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:9px;border-top:1px solid #ffffff14}
+    .shared-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:11px;border-top:1px solid #ffffff14}
+    .shared-actions button{min-height:40px;padding:9px 14px;border:1px solid #90d7d9;border-radius:3px;background:linear-gradient(110deg,#8bd8dc,#b9ebea);color:#0b1719;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:filter .18s,transform .18s}
+    .shared-actions button:hover{filter:brightness(1.08);transform:translateY(-1px)}
+    .shared-actions button:disabled{cursor:wait;opacity:.7}
     .shared-copy-status{color:#9fd8d9;font-size:10px;line-height:1.5}
     #partageMessage{display:none;margin:12px 0;padding:12px;border:1px solid #d6756844;background:#d675680d;color:#efaaa0;font-size:11px;line-height:1.6}
     #partageMessage:not([hidden]){display:block}
+    #buildPartage .shared-build-card{margin-bottom:18px}
+    #buildsLocaux .shared-build-card{margin:0}
     @media(max-width:760px){.shared-equipment{grid-template-columns:repeat(4,minmax(0,1fr))}.shared-build-lower{grid-template-columns:1fr}}
     @media(max-width:420px){.shared-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.shared-build-head{align-items:flex-start;flex-direction:column}.shared-power{align-self:flex-start}}
   </style>
 </head>
 <body>
-  <h1>Partager un build</h1>
-  <p id="partageIntro" class="share-intro">Choisis un build sauvegardé pour créer un lien autonome. La personne qui l’ouvre verra l’équipement, les stats, les aptitudes et le bonus de set sur une seule fiche.</p>
-  <p class="share-privacy"><strong>À savoir :</strong> le lien contient une copie des choix du build pour pouvoir l’afficher sans connexion. Il ne contient pas ton identifiant Bungie ni les identifiants de tes objets. Toute personne qui reçoit le lien peut voir cette fiche.</p>
+  <header class="share-hero">
+    <span class="share-eyebrow">Construis · montre · partage</span>
+    <h1>Partager un build</h1>
+    <p id="partageIntro" class="share-intro">Choisis un build sauvegardé pour créer un lien autonome. La personne qui l’ouvre verra l’équipement, les stats, les aptitudes et le bonus de set sur une seule fiche.</p>
+    <div class="share-hero-tags" aria-label="Contenu du lien"><span>Équipement complet</span><span>Stats et mods</span><span>Doctrine et bonus</span></div>
+  </header>
+  <aside class="share-privacy"><span class="share-privacy-icon" aria-hidden="true">◇</span><div><strong>Ce que le lien partage</strong><p>Il contient une copie des choix du build pour l’afficher sans connexion. Ton identifiant Bungie et les identifiants de tes objets n’y figurent pas. Toute personne qui reçoit le lien peut voir cette fiche.</p></div></aside>
   <p id="partageMessage" role="alert" hidden></p>
   <section id="buildPartage" aria-label="Build reçu"></section>
-  <h2>Mes builds enregistrés</h2>
+  <header class="share-section-heading"><div><span>Sur cet appareil</span><h2>Mes builds enregistrés</h2></div><p>Copie un lien pour partager une fiche complète.</p></header>
   <section id="buildsLocaux" aria-label="Builds sauvegardés sur cet appareil"></section>
   <p><a href="generateur.html">Créer un build</a> · <a href="equiper.html">Voir mes builds à équiper</a></p>
   <script src="builds-partage.js"></script>

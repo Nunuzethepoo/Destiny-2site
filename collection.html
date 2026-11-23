@@ -8,12 +8,12 @@
   <script src="vigie-shell.js" defer></script>
   <style>
     .collection-intro{max-width:790px;color:var(--muted);line-height:1.65}
-    .collection-tools{display:grid;grid-template-columns:minmax(220px,1fr) minmax(160px,240px) auto;gap:12px;align-items:end;padding:16px;margin:18px 0;border:1px solid var(--line);border-radius:4px;background:linear-gradient(145deg,#141d27,#10161e)}
+    .collection-tools{display:grid;grid-template-columns:minmax(220px,1.25fr) minmax(150px,.8fr) minmax(170px,1fr) auto;gap:12px;align-items:end;padding:16px;margin:18px 0;border:1px solid var(--line);border-radius:4px;background:linear-gradient(145deg,#141d27,#10161e)}
     .collection-tools label{display:grid;gap:6px;color:#aeb9c5;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
     .collection-toggle{display:flex!important;align-items:center;gap:9px;min-height:39px;padding:0 8px;text-transform:none!important;letter-spacing:0!important;font-size:11px!important}
     .collection-toggle input{accent-color:var(--gold)}
     .collection-status{min-height:18px;color:var(--muted);font-size:11px}
-    .collection-count{color:var(--gold);font:600 16px 'Barlow Condensed';letter-spacing:.6px;text-transform:uppercase}
+    .collection-count{margin:0 0 8px;color:var(--gold);font:600 16px 'Barlow Condensed';letter-spacing:.6px;text-transform:uppercase}
     #collectionResults{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:11px;margin:12px 0 18px}
     .weapon-card{display:grid;grid-template-columns:64px 1fr;gap:12px;min-width:0;padding:12px;border:1px solid var(--line);border-radius:4px;background:linear-gradient(145deg,#141d27,#10161e)}
     .weapon-art{width:64px;height:64px;object-fit:cover;border:1px solid #394755;border-radius:3px;background:#090d12}
@@ -34,6 +34,7 @@
     .weapon-empty{grid-column:1/-1;padding:22px;border:1px dashed #344251;border-radius:3px;color:var(--muted);text-align:center;font-size:12px;line-height:1.65}
     #loadMore{display:block;margin:12px auto 28px}
     .source-note{margin:14px 0 28px;color:#83909e;font-size:10px;line-height:1.6}
+    @media(max-width:900px){.collection-tools{grid-template-columns:repeat(2,minmax(0,1fr))}.collection-tools label:first-child{grid-column:1/-1}}
     @media(max-width:700px){.collection-tools{grid-template-columns:1fr 1fr}.collection-tools label:first-child{grid-column:1/-1}.collection-toggle{grid-column:1/-1}.weapon-card{grid-template-columns:52px 1fr}.weapon-art{width:52px;height:52px}}
     @media(max-width:420px){.collection-tools{grid-template-columns:1fr}.collection-tools label:first-child,.collection-toggle{grid-column:auto}#collectionResults{grid-template-columns:1fr}}
   </style>
@@ -43,8 +44,9 @@
   <p class="collection-intro">Parcours les armes de Destiny 2 et consulte les rolls PvE recommandés. Les recommandations viennent d’une liste communautaire et ne sont pas des verdicts officiels de Bungie.</p>
   <p id="collectionStatus" class="collection-status" role="status" aria-live="polite">Préparation du catalogue…</p>
   <section class="collection-tools" aria-label="Filtres du catalogue">
-    <label>Rechercher une arme ou un perk<input id="collectionSearch" type="search" placeholder="Ex. Ros Arago IV, Frenzy…"></label>
+    <label>Rechercher une arme ou un perk<input id="collectionSearch" type="search" placeholder="Ex. Ros Arago IV, Frénésie…"></label>
     <label>Type d’arme<select id="collectionType"><option value="">Tous les types</option></select></label>
+    <label>Filtrer par perk (nom français)<select id="collectionPerk"><option value="">Tous les perks</option></select></label>
     <label class="collection-toggle"><input id="recommendedOnly" type="checkbox"> Rolls recommandés seulement</label>
   </section>
   <div class="collection-count" id="collectionCount"></div>
