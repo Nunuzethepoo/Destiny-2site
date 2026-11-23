@@ -1,7 +1,8 @@
 // VIGIE's browser client talks only to the same-origin-controlled Worker relay.
 // Configure the Worker URL from oauth.html; never place Bungie's API key in this file.
 window.VIGIE_BUNGIE = (() => {
-  const getWorker = () => (localStorage.getItem("vigieWorkerUrl") || "").replace(/\/$/, "");
+  const DEFAULT_WORKER_URL = "https://vigie-bungie-api.loic-reniau.workers.dev";
+  const getWorker = () => (localStorage.getItem("vigieWorkerUrl") || DEFAULT_WORKER_URL).replace(/\/$/, "");
 
   function workerPath(path) {
     const worker = getWorker();
@@ -15,6 +16,9 @@ window.VIGIE_BUNGIE = (() => {
   }
 
   return {
+    getWorkerUrl() {
+      return getWorker();
+    },
     fetchApi(path, options = {}) {
       return fetch(workerPath(`/Platform${path}`), {
         ...options,
@@ -37,7 +41,7 @@ window.VIGIE_BUNGIE = (() => {
       return result;
     },
     setWorkerUrl(url) {
-      const clean = String(url || "").trim().replace(/\/$/, "");
+      const clean = String(url || DEFAULT_WORKER_URL).trim().replace(/\/$/, "");
       if (!/^https:\/\/[a-z0-9-]+\.[a-z0-9-]+\.workers\.dev$/i.test(clean)) {
         throw new Error("L’URL doit être celle du Worker Cloudflare, au format https://nom.compte.workers.dev");
       }
