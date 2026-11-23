@@ -8,7 +8,7 @@
   <script src="vigie-shell.js" defer></script>
   <style>
     .collection-intro{max-width:790px;color:var(--muted);line-height:1.65}
-    .collection-tools{display:grid;grid-template-columns:minmax(220px,1.25fr) minmax(150px,.8fr) minmax(170px,1fr) auto;gap:12px;align-items:end;padding:16px;margin:18px 0;border:1px solid var(--line);border-radius:4px;background:linear-gradient(145deg,#141d27,#10161e)}
+    .collection-tools{display:grid;grid-template-columns:minmax(220px,1.25fr) minmax(140px,.8fr) minmax(140px,.7fr) minmax(170px,1fr) auto;gap:12px;align-items:end;padding:16px;margin:18px 0;border:1px solid var(--line);border-radius:4px;background:linear-gradient(145deg,#141d27,#10161e)}
     .collection-tools label{display:grid;gap:6px;color:#aeb9c5;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
     .collection-toggle{display:flex!important;align-items:center;gap:9px;min-height:39px;padding:0 8px;text-transform:none!important;letter-spacing:0!important;font-size:11px!important}
     .collection-toggle input{accent-color:var(--gold)}
@@ -46,6 +46,7 @@
   <section class="collection-tools" aria-label="Filtres du catalogue">
     <label>Rechercher une arme ou un perk<input id="collectionSearch" type="search" placeholder="Ex. Ros Arago IV, Frénésie…"></label>
     <label>Type d’arme<select id="collectionType"><option value="">Tous les types</option></select></label>
+    <label>Tier d’arme<select id="collectionTier"><option value="">Tous les tiers</option></select></label>
     <label>Filtrer par perk (nom français)<select id="collectionPerk"><option value="">Tous les perks</option></select></label>
     <label class="collection-toggle"><input id="recommendedOnly" type="checkbox"> Rolls recommandés seulement</label>
   </section>
@@ -54,6 +55,6 @@
   <button id="loadMore" type="button" hidden>Afficher plus d’armes</button>
   <p class="source-note">Les noms des armes, les types et les perks utilisent les définitions françaises de Bungie lorsqu’elles existent. Les rolls PvE et certaines notes viennent de <a href="https://docs.google.com/spreadsheets/d/1JM-0SlxVDAi-C6rGVlLxa-J1WGewEeL8Qvq4htWZHhY/edit" target="_blank" rel="noreferrer">The Aegis Destiny 2 Shopping List</a>, une liste communautaire non officielle ; ses notes éditoriales peuvent rester en anglais. <a href="https://github.com/DestinyItemManager/DIM/wiki/Wish-Lists" target="_blank" rel="noreferrer">En savoir plus sur les listes communautaires</a>.</p>
   <script src="bungie-api.js"></script>
-  <script src="collection.js?v=fr-noms-3"></script>
+  <script src="collection.js?v=collection-tier-1"></script>
 </body>
 </html>
