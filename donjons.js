@@ -31,19 +31,221 @@ const DONJONS=[{"id":"shattered-throne","name":"Le Trône brisé","original":"Th
     if(!Number.isFinite(chosen)||!DONJONS[chosen]||!(DONJONS[chosen].name+" "+DONJONS[chosen].original).toLocaleLowerCase("fr").includes((filter||"").toLocaleLowerCase("fr")))chosen=Number(dungeonSelect.options[0].value);
     dungeonSelect.value=String(chosen);return true;
   }
+  var roomLayouts={
+    "shattered-throne":["city","rotunda","bridge"],
+    "pit-of-heresy":["tower-ring","cave-network","totem-room","harrow-maze","altar-arena"],
+    "prophecy":["four-pillar","cube-room","long-corridor"],
+    "grasp-of-avarice":["cave-loop","circular-arena","floating-islands"],
+    "duality":["nightmare-arena","vault-room","bell-arena"],
+    "spire-of-the-watcher":["spire-tower","long-docks","reactor-room"],
+    "ghosts-of-the-deep":["ghost-ritual","underwater-ring","hive-arena"],
+    "warlords-ruin":["jail","brazier-cross","stacked-bridge"],
+    "vespers-host":["reactor-branches","lab-hall","split-lab"],
+    "sundered-doctrine":["glyph-hall","wheel-rooms","triangle-arena"],
+    "equilibrium":["harvester-deck","three-wings","two-realms"]
+  };
+  function drawArchitecture(board,key){
+    function floor(x,y,w,h,r){board.appendChild(svg("rect",{x:x,y:y,width:w,height:h,rx:r||4,class:"map-room"}));board.appendChild(svg("rect",{x:x+5,y:y+5,width:w-10,height:h-10,rx:Math.max(1,(r||4)-2),class:"map-room-inner"}));}
+    function circle(x,y,r){board.appendChild(svg("circle",{cx:x,cy:y,r:r,class:"map-room"}));board.appendChild(svg("circle",{cx:x,cy:y,r:r-6,class:"map-room-inner"}));}
+    function poly(points){board.appendChild(svg("polygon",{points:points,class:"map-room"}));}
+    function wall(x1,y1,x2,y2,w){board.appendChild(svg("line",{x1:x1,y1:y1,x2:x2,y2:y2,class:"map-wall",strokeWidth:w||5}));}
+    function corridor(points,w){board.appendChild(svg("polyline",{points:points,fill:"none",class:"map-corridor",strokeWidth:w||22}));}
+    function door(x1,y1,x2,y2){board.appendChild(svg("line",{x1:x1,y1:y1,x2:x2,y2:y2,class:"map-door"}));}
+    function pillar(x,y,w,h){board.appendChild(svg("rect",{x:x,y:y,width:w||16,height:h||16,rx:2,class:"map-pillar"}));}
+    function hazard(x,y,w,h){board.appendChild(svg("rect",{x:x,y:y,width:w,height:h,rx:4,class:"map-hazard"}));}
+    function pit(x,y,r){board.appendChild(svg("circle",{cx:x,cy:y,r:r,class:"map-pit"}));}
+    function platform(x,y,w,h,label){
+      board.appendChild(svg("rect",{x:x,y:y,width:w,height:h,rx:5,class:"map-platform"}));
+      if(label){var t=svg("text",{x:x+w/2,y:y+h/2+3,class:"map-platform-label"});t.textContent=label;board.appendChild(t);}
+    }
+    function tileRoom(x,y,w,h,cols,rows){
+      floor(x,y,w,h,9);
+      for(var i=1;i<cols;i++)wall(x+w*i/cols,y+5,x+w*i/cols,y+h-5,1.5);
+      for(var j=1;j<rows;j++)wall(x+5,y+h*j/rows,x+w-5,y+h*j/rows,1.5);
+      door(x+w/2-13,y,x+w/2+13,y);
+    }
+    function radialRoom(cx,cy,r,count){
+      circle(cx,cy,r);
+      for(var i=0;i<count;i++){var a=Math.PI*2*i/count-Math.PI/2;wall(cx+Math.cos(a)*24,cy+Math.sin(a)*24,cx+Math.cos(a)*(r-8),cy+Math.sin(a)*(r-8),1.5);}
+    }
+    function centralPillars(points){points.forEach(function(p){pillar(p[0],p[1],18,18);});}
+    switch(key){
+      case "city":
+        corridor("320,292 320,220 272,184 238,112",24);corridor("320,220 390,180 450,112",20);corridor("320,220 254,247 176,264",18);corridor("320,220 392,250 470,270",18);
+        floor(205,45,112,78,3);floor(395,45,112,78,3);floor(106,228,112,74,3);floor(412,230,112,74,3);floor(260,156,120,90,2);
+        wall(205,84,317,84);wall(395,84,507,84);wall(106,265,218,265);wall(412,267,524,267);
+        door(255,123,273,123);door(432,123,451,123);door(211,229,230,229);door(410,230,430,230);
+        pillar(290,181);pillar(342,181);break;
+      case "rotunda":
+        radialRoom(320,185,127,8);circle(320,185,47);circle(320,185,25);
+        for(var q=0;q<4;q++){var aa=Math.PI*q/2;platform(320+Math.cos(aa)*103-22,185+Math.sin(aa)*103-13,44,26,"");}
+        floor(285,310,70,22,3);door(306,310,334,310);hazard(300,55,40,18);break;
+      case "bridge":
+        poly("94,90 546,90 580,156 546,245 94,245 60,156");corridor("320,310 320,264 320,184 320,86",30);
+        platform(118,139,96,46,"");platform(250,129,140,66,"");platform(425,139,96,46,"");
+        for(var bx=0;bx<5;bx++){wall(128+bx*96,94,128+bx*96,132,3);}
+        hazard(217,153,26,34);hazard(397,153,26,34);door(306,244,334,244);break;
+      case "tower-ring":
+        radialRoom(320,184,117,6);circle(320,184,48);
+        [[107,65],[293,47],[477,65],[107,235],[477,235]].forEach(function(p){floor(p[0],p[1],56,55,4);pillar(p[0]+20,p[1]+17,16,16);});
+        corridor("320,184 135,92",18);corridor("320,184 320,75",18);corridor("320,184 505,92",18);corridor("320,184 135,262",18);corridor("320,184 505,262",18);
+        door(316,66,344,66);break;
+      case "cave-network":
+        corridor("320,315 320,260 240,220 300,172 205,130 276,84 320,50",25);
+        corridor("240,220 130,220 95,172",18);corridor("300,172 422,172 505,128",18);corridor("276,84 392,70 490,92",17);
+        [[78,136,77,65],[105,190,72,48],[161,101,62,48],[250,58,72,46],[394,145,82,55],[470,68,82,56]].forEach(function(r){floor(r[0],r[1],r[2],r[3],18);});
+        hazard(265,207,105,24);hazard(340,106,128,18);pit(215,220,15);door(308,57,332,57);break;
+      case "totem-room":
+        tileRoom(93,55,454,265,4,3);floor(252,134,136,112,4);circle(320,190,38);
+        hazard(106,66,82,34);hazard(452,66,82,34);platform(100,243,84,36,"BALCON");platform(456,243,84,36,"BALCON");
+        centralPillars([[176,120],[448,120],[176,228],[448,228]]);door(302,320,338,320);break;
+      case "harrow-maze":
+        corridor("320,314 320,275 445,275 445,222 332,222 332,170 480,170 480,112 354,112 354,65",22);
+        corridor("332,222 196,222 196,167 265,167 265,112 151,112 151,76",20);
+        floor(276,281,88,34,4);floor(406,204,78,34,4);floor(293,151,78,34,4);floor(440,93,78,34,4);floor(109,89,82,34,4);
+        for(var mz=0;mz<5;mz++){hazard(210+mz*49,184,28,17);}
+        wall(255,238,255,270);wall(378,127,378,151);door(307,312,333,312);break;
+      case "altar-arena":
+        radialRoom(320,184,128,6);circle(320,184,43);pit(320,184,25);
+        [[132,95],[482,95],[132,232],[482,232]].forEach(function(p){platform(p[0],p[1],42,34,"");});
+        hazard(288,43,64,22);hazard(288,302,64,20);door(304,311,336,311);break;
+      case "four-pillar":
+        tileRoom(91,49,458,272,4,4);circle(320,185,45);centralPillars([[151,102],[491,102],[151,264],[491,264]]);
+        [[111,66],[476,66],[111,263],[476,263]].forEach(function(p){board.appendChild(svg("circle",{cx:p[0]+23,cy:p[1]+18,r:25,class:"map-mechanic-ring"}));});
+        hazard(288,47,64,19);door(302,320,338,320);break;
+      case "cube-room":
+        tileRoom(112,55,416,264,3,3);hazard(285,141,70,74);wall(250,60,250,127,4);wall(390,60,390,127,4);wall(250,229,250,314,4);wall(390,229,390,314,4);
+        platform(127,67,94,40,"A");platform(419,67,94,40,"B");platform(127,267,94,40,"C");platform(419,267,94,40,"D");
+        circle(320,177,26);door(302,55,338,55);break;
+      case "long-corridor":
+        tileRoom(79,97,483,165,2,1);corridor("112,180 220,180 320,180 420,180 528,180",26);
+        platform(96,126,72,104,"1");platform(281,118,78,120,"2");platform(472,126,72,104,"3");
+        hazard(190,157,48,48);hazard(402,157,48,48);door(306,97,334,97);break;
+      case "cave-loop":
+        corridor("320,315 320,267 188,267 118,217 118,137 190,88 319,88 456,88 526,143 526,222 451,267 320,267",22);
+        floor(81,122,92,71,24);floor(163,53,93,68,20);floor(277,47,90,78,25);floor(397,52,93,67,20);floor(467,123,94,73,22);floor(397,234,95,70,18);
+        hazard(260,208,120,48);circle(320,267,25);door(306,307,334,307);break;
+      case "circular-arena":
+        radialRoom(320,184,129,12);circle(320,184,56);circle(320,184,34);
+        [[168,75],[472,75],[168,242],[472,242]].forEach(function(p){pillar(p[0],p[1],22,22);});
+        hazard(300,48,40,19);floor(295,311,50,22,3);door(307,311,333,311);break;
+      case "floating-islands":
+        [[275,134,90,80],[105,82,92,54],[440,79,94,58],[82,230,105,58],[450,230,106,58],[255,45,130,42]].forEach(function(r){platform(r[0],r[1],r[2],r[3],"");});
+        corridor("320,278 320,214 320,174 151,111",15);corridor("320,174 485,108",15);corridor("320,174 134,257",15);corridor("320,174 503,257",15);
+        [[187,130,76,106],[378,130,75,106],[251,225,140,34]].forEach(function(r){hazard(r[0],r[1],r[2],r[3]);});
+        pit(320,177,31);break;
+      case "nightmare-arena":
+        tileRoom(92,53,456,268,3,3);hazard(106,67,92,50);hazard(442,67,92,50);floor(243,112,154,152,3);circle(320,188,43);
+        [[218,80],[406,80],[218,272],[406,272]].forEach(function(p){platform(p[0],p[1],52,26,"");});
+        centralPillars([[146,157],[494,157],[146,237],[494,237]]);door(303,321,337,321);break;
+      case "vault-room":
+        tileRoom(105,54,430,265,3,2);circle(320,187,44);
+        [[116,71],[461,71],[116,249],[461,249]].forEach(function(p){floor(p[0],p[1],63,50,3);});
+        [[227,75,58,31],[355,75,58,31],[227,268,58,31],[355,268,58,31]].forEach(function(r){hazard(r[0],r[1],r[2],r[3]);});
+        wall(249,112,249,261,5);wall(391,112,391,261,5);door(247,172,247,205);door(389,172,389,205);break;
+      case "bell-arena":
+        radialRoom(320,184,132,10);circle(320,184,57);
+        [[130,67],[464,67],[130,261],[464,261]].forEach(function(p){board.appendChild(svg("circle",{cx:p[0]+20,cy:p[1]+20,r:28,class:"map-mechanic-ring"}));pillar(p[0]+12,p[1]+12,16,16);});
+        hazard(290,47,60,20);platform(292,307,56,20,"SORTIE");door(306,310,334,310);break;
+      case "spire-tower":
+        corridor("320,315 320,270 225,238 225,198 408,165 408,122 278,90 278,50",28);
+        [[114,222,112,44],[189,177,91,38],[347,133,104,38],[228,56,100,37],[414,222,102,42]].forEach(function(r){platform(r[0],r[1],r[2],r[3],"");});
+        hazard(268,224,104,22);wall(190,249,190,269,5);wall(455,108,455,128,5);break;
+      case "long-docks":
+        poly("69,113 571,113 594,180 571,247 69,247 46,180");tileRoom(82,123,476,114,4,1);
+        corridor("111,180 525,180",21);[[124,136],[235,136],[346,136],[457,136]].forEach(function(p){platform(p[0],p[1],58,88,"");});
+        hazard(291,147,58,65);door(307,113,333,113);break;
+      case "reactor-room":
+        tileRoom(95,54,450,267,3,3);circle(320,186,49);circle(320,186,20);
+        [[130,90],[462,90],[130,234],[462,234]].forEach(function(p){platform(p[0],p[1],48,34,"");});
+        hazard(280,47,80,24);hazard(280,301,80,18);centralPillars([[221,113],[403,113],[221,248],[403,248]]);break;
+      case "ghost-ritual":
+        radialRoom(320,184,127,8);circle(320,184,48);
+        [[122,69],[473,69],[122,242],[473,242]].forEach(function(p){platform(p[0],p[1],45,31,"");});
+        [[200,94],[424,94],[200,245],[424,245]].forEach(function(p){board.appendChild(svg("circle",{cx:p[0],cy:p[1],r:18,class:"map-mechanic-ring"}));});
+        hazard(284,41,72,20);door(305,310,335,310);break;
+      case "underwater-ring":
+        circle(320,185,135);circle(320,185,92);circle(320,185,46);hazard(270,136,100,98);
+        for(var ur=0;ur<8;ur++){var ua=ur*Math.PI/4;platform(320+Math.cos(ua)*111-17,185+Math.sin(ua)*111-12,34,24,"");}
+        corridor("320,315 320,278 320,245",18);door(304,314,336,314);break;
+      case "hive-arena":
+        poly("320,40 470,75 552,180 470,286 320,324 170,286 88,180 170,75");
+        circle(320,184,57);circle(320,184,29);
+        [[125,130],[485,130],[125,219],[485,219]].forEach(function(p){platform(p[0],p[1],38,28,"");});
+        [[195,79],[423,79],[195,262],[423,262]].forEach(function(p){pillar(p[0],p[1],18,18);});
+        hazard(291,38,58,18);break;
+      case "jail":
+        tileRoom(105,52,430,271,3,3);floor(258,126,124,107,2);
+        [[123,69],[263,69],[403,69],[123,252],[263,252],[403,252]].forEach(function(p){floor(p[0],p[1],74,48,2);});
+        [[145,69],[285,69],[425,69],[145,252],[285,252],[425,252]].forEach(function(p){wall(p[0],p[1],p[0],p[1]+48,2);});
+        for(var jb=0;jb<7;jb++)wall(210+jb*31,59,210+jb*31,107,2);
+        circle(320,180,25);door(302,323,338,323);break;
+      case "brazier-cross":
+        corridor("320,184 320,75",29);corridor("320,184 141,184",29);corridor("320,184 499,184",29);corridor("320,184 320,295",29);
+        circle(320,184,62);[[320,56],[119,184],[499,184],[320,298]].forEach(function(p){circle(p[0],p[1],35);pillar(p[0]-7,p[1]-7,14,14);});
+        [[160,95,48,37],[431,95,48,37],[160,236,48,37],[431,236,48,37]].forEach(function(r){hazard(r[0],r[1],r[2],r[3]);});break;
+      case "stacked-bridge":
+        poly("74,135 566,135 586,180 566,225 74,225 54,180");corridor("320,311 320,254 320,180 320,104 320,48",28);
+        platform(101,158,105,45,"NIVEAU 1");platform(268,147,104,66,"BOSS");platform(434,158,105,45,"NIVEAU 2");
+        [[218,153],[402,153]].forEach(function(p){hazard(p[0],p[1],20,54);});
+        wall(120,133,520,133,3);door(306,226,334,226);break;
+      case "reactor-branches":
+        tileRoom(250,112,140,136,2,2);corridor("320,180 320,76 180,76 110,119",22);corridor("320,180 470,76 535,119",22);corridor("320,180 320,285 190,285 111,249",22);corridor("320,180 470,285 535,249",22);
+        [[74,83,88,68],[478,83,88,68],[74,218,88,68],[478,218,88,68]].forEach(function(r){floor(r[0],r[1],r[2],r[3],4);});
+        hazard(289,145,62,70);door(305,111,335,111);break;
+      case "lab-hall":
+        tileRoom(77,100,486,166,3,1);corridor("104,183 536,183",25);
+        [[95,116,72,52],[204,116,72,52],[313,116,72,52],[422,116,72,52],[95,199,72,52],[204,199,72,52],[313,199,72,52],[422,199,72,52]].forEach(function(r){floor(r[0],r[1],r[2],r[3],2);});
+        hazard(281,151,78,64);door(302,99,338,99);break;
+      case "split-lab":
+        tileRoom(85,53,470,267,2,2);wall(320,60,320,313,7);door(311,171,329,171);
+        floor(104,76,190,213,3);floor(346,76,190,213,3);circle(200,181,39);circle(440,181,39);
+        hazard(167,149,66,63);hazard(407,149,66,63);corridor("320,180 200,180",17);corridor("320,180 440,180",17);break;
+      case "glyph-hall":
+        poly("112,56 528,56 560,100 560,281 528,319 112,319 80,281 80,100");
+        corridor("320,315 320,263 320,195 320,101 320,45",23);
+        [[128,84],[230,84],[382,84],[484,84],[128,239],[230,239],[382,239],[484,239]].forEach(function(p){platform(p[0],p[1],42,34,"");});
+        [[165,140,55,22],[420,140,55,22],[165,205,55,22],[420,205,55,22]].forEach(function(r){hazard(r[0],r[1],r[2],r[3]);});break;
+      case "wheel-rooms":
+        [[122,64],[278,48],[434,64],[122,231],[278,248],[434,231]].forEach(function(p){floor(p[0],p[1],84,73,5);circle(p[0]+42,p[1]+36,23);});
+        corridor("320,184 164,100",19);corridor("320,184 320,84",19);corridor("320,184 476,100",19);corridor("320,184 164,267",19);corridor("320,184 320,284",19);corridor("320,184 476,267",19);
+        circle(320,184,38);hazard(291,158,58,51);door(304,320,336,320);break;
+      case "triangle-arena":
+        poly("320,43 561,302 79,302");poly("320,82 510,282 130,282");circle(320,194,48);
+        [[286,63],[144,259],[462,259]].forEach(function(p){platform(p[0],p[1],68,32,"");});
+        [[214,138,45,18],[381,138,45,18],[265,253,110,20]].forEach(function(r){hazard(r[0],r[1],r[2],r[3]);});door(306,303,334,303);break;
+      case "harvester-deck":
+        poly("119,92 174,54 465,54 521,92 566,92 566,274 511,274 470,311 170,311 129,274 74,274 74,92");
+        tileRoom(174,83,292,196,3,2);corridor("320,311 320,275 320,184 320,48",22);
+        [[91,111],[479,111],[91,215],[479,215]].forEach(function(p){floor(p[0],p[1],70,50,3);});
+        hazard(263,88,114,38);hazard(263,235,114,34);circle(320,184,38);door(304,278,336,278);break;
+      case "three-wings":
+        tileRoom(246,119,148,126,2,2);corridor("320,183 320,75",25);corridor("320,183 143,183",25);corridor("320,183 497,183",25);corridor("320,183 320,292",22);
+        [[283,45,74,57],[71,146,91,73],[478,146,91,73],[284,265,74,58]].forEach(function(r){floor(r[0],r[1],r[2],r[3],4);});
+        [[298,58,45,25],[94,166,48,34],[499,166,48,34]].forEach(function(r){hazard(r[0],r[1],r[2],r[3]);});
+        circle(320,184,29);door(304,119,336,119);break;
+      case "two-realms":
+        tileRoom(76,66,226,240,4,3);tileRoom(338,66,226,240,4,3);
+        wall(320,54,320,315,7);door(309,174,331,174);
+        [[113,107,55,32],[210,230,55,32],[375,107,55,32],[472,230,55,32]].forEach(function(r){hazard(r[0],r[1],r[2],r[3]);});
+        circle(189,185,30);circle(451,185,30);corridor("302,185 338,185",19);break;
+    }
+  }
   function drawMap(m){
     mapCard.replaceChildren();
     var title=el("h3","",m.title);
-    var note=el("p","map-subtitle","Vue de dessus · repère tactique simplifié, pas à l’échelle.");
+    var note=el("p","map-subtitle","Plan tactique vu de dessus : empreinte de la salle, niveaux, accès, obstacles et objectifs de la rencontre. Distances approximatives.");
     var frame=el("div","map-frame");
-    var board=svg("svg",{viewBox:"0 0 640 360",class:"tactical-map",role:"img","aria-label":m.title+" — schéma tactique vu de dessus"});
+    var board=svg("svg",{viewBox:"0 0 640 360",class:"tactical-map",role:"img","aria-label":m.title+" — plan tactique de la salle vu de dessus"});
     var defs=svg("defs");
+    var grid=svg("pattern",{id:"vigie-map-grid",width:"20",height:"20",patternUnits:"userSpaceOnUse"});
+    grid.appendChild(svg("path",{d:"M 20 0 L 0 0 0 20",class:"map-grid-line"}));defs.appendChild(grid);
     var marker=svg("marker",{id:"vigie-map-arrow",viewBox:"0 0 10 10",refX:"8",refY:"5",markerWidth:"5",markerHeight:"5",orient:"auto-start-reverse"});
-    marker.appendChild(svg("path",{d:"M 0 0 L 10 5 L 0 10 z",fill:"#7bcbd0"}));defs.appendChild(marker);board.appendChild(defs);
-    board.appendChild(svg("text",{x:"320",y:"18",class:"map-direction"}));
-    var direction=board.lastChild;direction.textContent="FOND / SUITE";
-    var byPos={};
-    (m.nodes||[]).forEach(function(n){byPos[n.p]=n;});
+    marker.appendChild(svg("path",{d:"M 0 0 L 10 5 L 0 10 z",fill:"#74d1d0"}));defs.appendChild(marker);board.appendChild(defs);
+    board.appendChild(svg("rect",{x:"0",y:"0",width:"640",height:"360",class:"map-ground"}));
+    board.appendChild(svg("rect",{x:"0",y:"0",width:"640",height:"360",fill:"url(#vigie-map-grid)",opacity:".42"}));
+    var layout=(roomLayouts[DONJONS[currentDungeon].id]||[])[currentEncounter]||"rotunda";
+    drawArchitecture(board,layout);
     (m.links||[]).forEach(function(link){
       var a=positions[link[0]],b=positions[link[1]];
       if(!a||!b)return;
@@ -51,18 +253,34 @@ const DONJONS=[{"id":"shattered-throne","name":"Le Trône brisé","original":"Th
     });
     (m.nodes||[]).forEach(function(n){
       var pos=positions[n.p];if(!pos)return;
-      var g=svg("g",{});
-      var rect=svg("rect",{x:pos[0]-62,y:pos[1]-25,width:124,height:50,rx:3,class:"map-zone map-zone-"+(n.kind||"room")});
-      g.appendChild(rect);
-      var lines=String(n.label||"").split("|");
-      var textNode=svg("text",{x:pos[0],y:pos[1]-(lines.length>1?3:-0),class:"map-label"});
-      lines.slice(0,2).forEach(function(line,i){var t=svg("tspan",{x:pos[0],dy:i===0?"0":"13"});t.textContent=line;textNode.appendChild(t);});
-      g.appendChild(textNode);board.appendChild(g);
+      var lines=String(n.label||"").split("|").slice(0,2);
+      var widest=lines.reduce(function(a,b){return Math.max(a,b.length);},0);
+      var w=Math.max(72,Math.min(126,widest*5.3+18)),h=lines.length>1?29:20;
+      var side=pos[0]<180?"right":pos[0]>460?"left":"center";
+      var bx=side==="right"?pos[0]+16:side==="left"?pos[0]-16-w:pos[0]-w/2;
+      var by=pos[1]<105?pos[1]+10:pos[1]-h-10;
+      var edgeX=side==="right"?bx:side==="left"?bx+w:pos[0];
+      var edgeY=by+h/2;
+      board.appendChild(svg("line",{x1:pos[0],y1:pos[1],x2:edgeX,y2:edgeY,class:"map-leader"}));
+      var group=svg("g",{class:"map-marker map-marker-"+(n.kind||"room")});
+      group.appendChild(svg("rect",{x:bx,y:by,width:w,height:h,rx:3,class:"map-label-bg"}));
+      var tx=side==="center"?pos[0]:bx+7,anchor=side==="center"?"middle":"start";
+      var textNode=svg("text",{x:tx,y:by+(lines.length>1?11:13),class:"map-label","text-anchor":anchor});
+      lines.forEach(function(line,i){var t=svg("tspan",{x:tx,dy:i===0?"0":"11"});t.textContent=line;textNode.appendChild(t);});
+      group.appendChild(textNode);
+      if(n.kind==="entry"){group.appendChild(svg("rect",{x:pos[0]-5,y:pos[1]-5,width:10,height:10,rx:1,class:"map-pin"}));}
+      else if(n.kind==="goal"){group.appendChild(svg("polygon",{points:(pos[0])+","+(pos[1]-7)+" "+(pos[0]+7)+","+pos[1]+" "+pos[0]+","+(pos[1]+7)+" "+(pos[0]-7)+","+pos[1],class:"map-pin"}));}
+      else if(n.kind==="danger"){group.appendChild(svg("polygon",{points:(pos[0])+","+(pos[1]-7)+" "+(pos[0]+7)+","+(pos[1]+6)+" "+(pos[0]-7)+","+(pos[1]+6),class:"map-pin"}));}
+      else{group.appendChild(svg("circle",{cx:pos[0],cy:pos[1],r:6,class:"map-pin"}));}
+      board.appendChild(group);
     });
-    var bottom=svg("text",{x:"320",y:"352",class:"map-direction"});bottom.textContent="CÔTÉ RALLIEMENT";board.appendChild(bottom);
+    var north=svg("g",{class:"map-compass"});
+    north.appendChild(svg("path",{d:"M 606 47 L 598 64 L 606 61 L 614 64 Z",class:"map-north"}));
+    var nt=svg("text",{x:"606",y:"40",class:"map-direction"});nt.textContent="N";north.appendChild(nt);board.appendChild(north);
+    var bottom=svg("text",{x:"320",y:"351",class:"map-direction"});bottom.textContent="CÔTÉ RALLIEMENT";board.appendChild(bottom);
     frame.appendChild(board);mapCard.append(title,note,frame);
     var legend=el("div","map-legend");
-    [[ "legend-entry","Entrée / route"],["legend-goal","Objectif / mécanisme"],["legend-danger","Boss / danger"]].forEach(function(x){var item=el("span","");var dot=el("i","legend-dot "+x[0]);dot.setAttribute("aria-hidden","true");item.append(dot,document.createTextNode(x[1]));legend.appendChild(item);});
+    [["legend-entry","Entrée"],["legend-goal","Mécanisme"],["legend-danger","Boss / danger"],["legend-safe","Couverture / accès"]].forEach(function(x){var item=el("span","");var dot=el("i","legend-dot "+x[0]);dot.setAttribute("aria-hidden","true");item.append(dot,document.createTextNode(x[1]));legend.appendChild(item);});
     mapCard.appendChild(legend);
   }
   function render(){
