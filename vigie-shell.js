@@ -5,6 +5,7 @@
     ["partager.html", "Partager"],
     ["collection.html", "Collection"],
     ["raids.html", "Raids"],
+    ["donjons.html", "Donjons"],
     ["rapports.html#raid", "Raid Report"],
     ["rapports.html#donjon", "Donjon Report"],
     ["clan.html", "Clan"],
