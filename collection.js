@@ -4,12 +4,13 @@
   const SKIP_TABS = new Set(["Shopping List", "Archetypes", "Experimental", "Exotic Armor", "Builds", "Perks", "Origin Traits", "Set Bonuses", "Artifact Mods", "Fragments", "Aspects", "Subclasses", "Encounters", "Transitions", "Raid Mods"]);
   const BUCKETS_ARMES = new Set([1498876634, 2465295065, 953998645]);
   const TTL = 30 * 60 * 1000;
-  const CACHE_KEY = "vigieCollectionGodRollsV7";
+  const CACHE_KEY = "vigieCollectionGodRollsV8";
   const PAGE_SIZE = 60;
   const el = {
     status: document.getElementById("collectionStatus"),
     search: document.getElementById("collectionSearch"),
     type: document.getElementById("collectionType"),
+    doctrine: document.getElementById("collectionDoctrine"),
     perk: document.getElementById("collectionPerk"),
     tier: document.getElementById("collectionTier"),
     onlyRecommended: document.getElementById("recommendedOnly"),
@@ -159,17 +160,30 @@
     const pathFrLite = cheminsFr[type];
     const pathFrComplet = cheminsFr.DestinyInventoryItemDefinition;
     const pathFr = pathFrLite || pathFrComplet;
+    const pathDegatsEn = cheminsEn.DestinyDamageTypeDefinition;
+    const pathDegatsFr = cheminsFr.DestinyDamageTypeDefinition;
     if (!pathEn) throw new Error("Bungie n’a pas renvoyé le catalogue des armes.");
     async function chargerDefinitions(path) {
       const response = await VIGIE_BUNGIE.fetchPublic(path);
       if (!response.ok) throw new Error("HTTP " + response.status);
       return response.json();
     }
-    const [defsEn, defsFrChargees] = await Promise.all([
+    const [defsEn, defsFrChargees, degatsEn, degatsFr] = await Promise.all([
       chargerDefinitions(pathEn),
-      pathFr ? chargerDefinitions(pathFr).catch(function () { return {}; }) : Promise.resolve({})
+      pathFr ? chargerDefinitions(pathFr).catch(function () { return {}; }) : Promise.resolve({}),
+      pathDegatsEn ? chargerDefinitions(pathDegatsEn).catch(function () { return {}; }) : Promise.resolve({}),
+      pathDegatsFr ? chargerDefinitions(pathDegatsFr).catch(function () { return {}; }) : Promise.resolve({})
     ]);
     let defsFr = defsFrChargees || {};
+    const nomsTypesDegats = {};
+    Object.keys(degatsEn || {}).forEach(function (hash) {
+      const definitionFr = degatsFr && degatsFr[hash];
+      const definitionEn = degatsEn[hash];
+      const nomFr = definitionFr && definitionFr.displayProperties && definitionFr.displayProperties.name;
+      const nomEn = definitionEn && definitionEn.displayProperties && definitionEn.displayProperties.name;
+      const nom = nomFr && nomFr.trim() ? nomFr.trim() : (nomEn || "").trim();
+      if (nom && normalize(nom) !== "none") nomsTypesDegats[String(hash)] = nom;
+    });
     function compterNomsTraduits(definitionsFr) {
       return Object.keys(defsEn).filter(function (hash) {
         const english = defsEn[hash];
@@ -216,6 +230,7 @@
         name: nomsParHash[entry.hash] || definition.displayProperties.name,
         icon: definition.displayProperties.icon || "",
         type: TYPE_FR[definition.itemTypeDisplayName] || definition.itemTypeDisplayName || "Arme",
+        element: nomsTypesDegats[String(definition.defaultDamageTypeHash || definition.damageTypeHash || "")] || "",
         tierType: Number(definition.inventory.tierType) || 0,
         tier: TIER_FR[Number(definition.inventory.tierType)] || "Inconnu",
         exotic: Number(definition.inventory.tierType) === 6
@@ -306,11 +321,13 @@
   function render() {
     const query = normalize(el.search.value);
     const type = el.type.value;
+    const doctrine = el.doctrine.value;
     const selectedGodRollTier = el.tier.value;
     const selectedPerk = el.perk.value;
     const onlyRecommended = el.onlyRecommended.checked;
     const filtered = weapons.filter(function (weapon) {
       if (type && weapon.type !== type) return false;
+      if (doctrine && normalize(weapon.element) !== doctrine) return false;
       if (selectedGodRollTier && !(weapon.rolls || []).some(function (roll) { return normalize(roll.tier) === selectedGodRollTier; })) return false;
       if (onlyRecommended && !weapon.rolls.length) return false;
       if (selectedPerk && !(weapon.rolls || []).some(function (roll) {
@@ -347,6 +364,23 @@
       const option = document.createElement("option");
       option.value = type; option.textContent = type;
       el.type.appendChild(option);
+    });
+  }
+
+  function fillDoctrines() {
+    const parCle = new Map();
+    weapons.forEach(function (weapon) {
+      const nom = String(weapon.element || "").trim();
+      const cle = normalize(nom);
+      if (cle && !parCle.has(cle)) parCle.set(cle, nom);
+    });
+    Array.from(parCle.entries()).sort(function (a, b) {
+      return a[1].localeCompare(b[1], "fr");
+    }).forEach(function (entree) {
+      const option = document.createElement("option");
+      option.value = entree[0];
+      option.textContent = entree[1];
+      el.doctrine.appendChild(option);
     });
   }
 
@@ -413,7 +447,7 @@
         weapons = addRecommendations(cached.catalog, cached.recommendations, traductionsPerks);
         afficherToutSiAucunRoll();
         el.status.textContent = "Catalogue en cache · " + compteNomsFrancais(cached.catalog) + " nom(s) français distinct(s) · mise à jour dans " + Math.max(1, Math.round((TTL - (Date.now() - cached.savedAt)) / 60000)) + " min.";
-        fillTypes(); fillTiers(); fillPerks(); render();
+        fillTypes(); fillDoctrines(); fillTiers(); fillPerks(); render();
         try { localStorage.setItem(CACHE_KEY, JSON.stringify(cached)); } catch (_) {}
         return;
       }
@@ -437,7 +471,7 @@
     weapons = addRecommendations(catalog, recommendations, traductionsPerks);
     afficherToutSiAucunRoll();
     if (catalogueSecours) el.onlyRecommended.checked = false;
-    fillTypes(); fillTiers(); fillPerks(); render();
+    fillTypes(); fillDoctrines(); fillTiers(); fillPerks(); render();
     if (!catalogueSecours && catalog.length) {
       try { localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), catalog: catalog, recommendations: recommendations, perkTranslations: traductionsPerks })); } catch (_) {}
     }
@@ -453,6 +487,7 @@
 
   el.search.addEventListener("input", function () { visibleLimit = PAGE_SIZE; render(); });
   el.type.addEventListener("change", function () { visibleLimit = PAGE_SIZE; render(); });
+  el.doctrine.addEventListener("change", function () { visibleLimit = PAGE_SIZE; render(); });
   el.perk.addEventListener("change", function () { visibleLimit = PAGE_SIZE; render(); });
   el.tier.addEventListener("change", function () { visibleLimit = PAGE_SIZE; render(); });
   el.onlyRecommended.addEventListener("change", function () { visibleLimit = PAGE_SIZE; render(); });
