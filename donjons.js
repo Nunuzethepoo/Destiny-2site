@@ -93,7 +93,7 @@ const DONJONS=[{"id":"shattered-throne","name":"Le Trône brisé","original":"Th
     currentDungeon=index;currentEncounter=0;
     if(DONJONS[index]){dungeonSearch.value="";addOptions("");dungeonSelect.value=String(index);render();}
   }
-  dungeonSearch.addEventListener("input",function(){if(addOptions(dungeonSearch.value)){currentDungeon=Number(dungeonSelect.value);currentEncounter=0;render();}});
+  dungeonSearch.addEventListener("input",function(){if(addOptions(dungeonSearch.value)){routePanel.hidden=false;currentDungeon=Number(dungeonSelect.value);currentEncounter=0;render();}else{currentDungeon=-1;routePanel.hidden=true;summary.replaceChildren(el("h2","","Aucun donjon trouvé"));nav.replaceChildren();card.replaceChildren(el("p","empty-state","Essaie un autre nom de donjon ou son titre anglais."));mapCard.replaceChildren();}});
   dungeonSelect.addEventListener("change",function(){if(Number(dungeonSelect.value)>=0)selectDungeon(Number(dungeonSelect.value));});
   encounterSelect.addEventListener("change",function(){currentEncounter=Number(encounterSelect.value)||0;render();});
   var saved=null;try{saved=JSON.parse(localStorage.getItem("vigieDonjonSelection")||"null");}catch(_){}
