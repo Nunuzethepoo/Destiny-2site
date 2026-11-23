@@ -3,7 +3,7 @@ const DONJONS=[{"id":"shattered-throne","name":"Le Trône brisé","original":"Th
 
 (function(){
   "use strict";
-  var positions={entry:[320,312],center:[320,184],north:[320,58],south:[320,312],west:[112,184],east:[528,184],nw:[126,70],ne:[514,70],sw:[126,300],se:[514,300]};
+  var positions={entry:[320,312],center:[320,184],north:[320,58],south:[320,260],west:[112,184],east:[528,184],nw:[126,70],ne:[514,70],sw:[126,300],se:[514,300]};
   var NS="http://www.w3.org/2000/svg";
   var dungeonSelect=document.getElementById("dungeonSelect");
   var encounterSelect=document.getElementById("encounterSelect");
@@ -93,7 +93,7 @@ const DONJONS=[{"id":"shattered-throne","name":"Le Trône brisé","original":"Th
     currentDungeon=index;currentEncounter=0;
     if(DONJONS[index]){dungeonSearch.value="";addOptions("");dungeonSelect.value=String(index);render();}
   }
-  dungeonSearch.addEventListener("input",function(){if(addOptions(dungeonSearch.value))selectDungeon(Number(dungeonSelect.value));});
+  dungeonSearch.addEventListener("input",function(){if(addOptions(dungeonSearch.value)){currentDungeon=Number(dungeonSelect.value);currentEncounter=0;render();}});
   dungeonSelect.addEventListener("change",function(){if(Number(dungeonSelect.value)>=0)selectDungeon(Number(dungeonSelect.value));});
   encounterSelect.addEventListener("change",function(){currentEncounter=Number(encounterSelect.value)||0;render();});
   var saved=null;try{saved=JSON.parse(localStorage.getItem("vigieDonjonSelection")||"null");}catch(_){}
