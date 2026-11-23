@@ -25,6 +25,14 @@
     .share-section-heading p{margin:0;color:var(--muted);font-size:10px;text-align:right}
     #buildPartage:empty{display:none}
     #buildsLocaux{display:grid;gap:14px}
+    .shared-build-entry{display:grid;gap:7px;margin-bottom:18px}
+    .shared-build-preview{position:relative;display:block;width:100%;overflow:hidden;padding:0;border:1px solid #536171;border-radius:4px;background:#090e13;cursor:pointer;text-align:left;transition:border-color .18s,transform .18s}
+    .shared-build-preview:hover{border-color:#8bd8dc;transform:translateY(-2px)}
+    .shared-build-preview img{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:contain}
+    .shared-preview-hint{position:absolute;right:10px;bottom:10px;padding:7px 10px;border:1px solid #8bd8dc66;border-radius:3px;background:#091216e8;color:#c5eeee;font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}
+    .shared-image-download{display:inline-flex;justify-self:start;align-items:center;min-height:34px;padding:7px 11px;border:1px solid #53616e;border-radius:3px;background:linear-gradient(110deg,#1b2731,#111820);color:#c4ced7;font-size:9px;font-weight:800;letter-spacing:.06em;text-decoration:none;text-transform:uppercase}
+    .shared-image-download:hover{border-color:#8bd8dc;color:#d3f1f2}
+    .shared-build-entry .shared-build-card[hidden]{display:none}
     .shared-build-card{margin:0 0 18px;padding:clamp(14px,2.4vw,22px);border:1px solid #394653;border-top:2px solid var(--gold);border-radius:5px;background:radial-gradient(ellipse at 100% 0,#c99f5b0b,transparent 38%),linear-gradient(145deg,#18212b,#0d131a 68%);box-shadow:0 15px 32px #0004}
     .shared-build-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid #ffffff15}
     .shared-class-tag{display:inline-flex;padding:4px 7px;border:1px solid #c99f5b77;color:#e3c58e;font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
@@ -68,7 +76,8 @@
     .shared-copy-status{color:#9fd8d9;font-size:10px;line-height:1.5}
     #partageMessage{display:none;margin:12px 0;padding:12px;border:1px solid #d6756844;background:#d675680d;color:#efaaa0;font-size:11px;line-height:1.6}
     #partageMessage:not([hidden]){display:block}
-    #buildPartage .shared-build-card{margin-bottom:18px}
+    #buildPartage .shared-build-card{margin-bottom:0}
+    #buildsPartages .shared-build-card{margin:0}
     #buildsLocaux .shared-build-card{margin:0}
     @media(max-width:760px){.shared-equipment{grid-template-columns:repeat(4,minmax(0,1fr))}.shared-build-lower{grid-template-columns:1fr}}
     @media(max-width:420px){.shared-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.shared-build-head{align-items:flex-start;flex-direction:column}.shared-power{align-self:flex-start}}
@@ -78,8 +87,8 @@
   <header class="share-hero">
     <span class="share-eyebrow">Construis · montre · partage</span>
     <h1>Partager un build</h1>
-    <p id="partageIntro" class="share-intro">Tes builds restent privés après leur sauvegarde. Choisis toi-même ceux que tu veux partager : ils apparaîtront alors dans ta liste de builds partagés et tu pourras envoyer leur lien.</p>
-    <div class="share-hero-tags" aria-label="Contenu du lien"><span>Équipement complet</span><span>Stats et mods</span><span>Doctrine et bonus</span></div>
+    <p id="partageIntro" class="share-intro">Tes builds partagés affichent une image synthèse téléchargeable. Clique sur l’image pour ouvrir les détails complets de l’équipement, des stats, des aptitudes et des bonus.</p>
+    <div class="share-hero-tags" aria-label="Contenu du lien"><span>Image synthèse cliquable</span><span>Équipement complet</span><span>Stats et mods</span><span>Doctrine et bonus</span></div>
   </header>
   <aside class="share-privacy"><span class="share-privacy-icon" aria-hidden="true">◇</span><div><strong>Tu gardes le contrôle</strong><p>Un build sauvegardé n’est pas partagé automatiquement. Seuls les builds pour lesquels tu cliques sur « Partager ce build » apparaissent dans ta liste partagée. Le lien copié contient la fiche du build ; toute personne qui le reçoit peut la consulter.</p></div></aside>
   <p id="partageMessage" role="alert" hidden></p>
@@ -89,7 +98,7 @@
   <header class="share-section-heading"><div><span>Privés tant que tu ne les partages pas</span><h2>Mes builds sauvegardés</h2></div><p>Utilise « Partager ce build » pour l’ajouter à la liste ci-dessus et copier son lien.</p></header>
   <section id="buildsLocaux" aria-label="Builds sauvegardés privés sur cet appareil"></section>
   <p><a href="generateur.html">Créer un build</a> · <a href="equiper.html">Voir mes builds à équiper</a></p>
-  <script src="builds-partage.js"></script>
+  <script src="builds-partage.js?v=image-synthese-1"></script>
   <script>VIGIE_PARTAGE.initialiser();</script>
 </body>
 </html>
