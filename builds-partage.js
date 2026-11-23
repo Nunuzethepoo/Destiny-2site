@@ -186,6 +186,63 @@
     }
   }
 
+  const CLE_BUILDS_PARTAGES = "vigieBuildsPartagesV1";
+
+  function lireBuildsPartages() {
+    try {
+      const builds = JSON.parse(localStorage.getItem(CLE_BUILDS_PARTAGES) || "[]");
+      return Array.isArray(builds) ? builds.filter(function (item) {
+        return item && typeof item.id === "string" && item.build && typeof item.build === "object";
+      }) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function signatureBuild(build) {
+    return JSON.stringify(preparerBuild(build));
+  }
+
+  function ajouterBuildPartage(build) {
+    const builds = lireBuildsPartages();
+    const signature = signatureBuild(build);
+    const dejaPartage = builds.some(function (item) {
+      return signatureBuild(item.build) === signature;
+    });
+    if (dejaPartage) return false;
+    builds.push({
+      id: Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8),
+      build: preparerBuild(build)
+    });
+    localStorage.setItem(CLE_BUILDS_PARTAGES, JSON.stringify(builds));
+    return true;
+  }
+
+  function retirerBuildPartage(id) {
+    const builds = lireBuildsPartages().filter(function (item) { return item.id !== id; });
+    localStorage.setItem(CLE_BUILDS_PARTAGES, JSON.stringify(builds));
+  }
+
+  function afficherBuildsPartages() {
+    const liste = document.getElementById("buildsPartages");
+    if (!liste) return;
+    while (liste.firstChild) liste.removeChild(liste.firstChild);
+    const builds = lireBuildsPartages();
+    if (!builds.length) {
+      const empty = document.createElement("p");
+      empty.className = "shared-empty-card";
+      empty.textContent = "Aucun build n’est partagé pour le moment. Choisis un build sauvegardé ci-dessous et clique sur « Partager ce build ».";
+      liste.appendChild(empty);
+      return;
+    }
+    builds.slice().reverse().forEach(function (item) {
+      liste.appendChild(rendreBuild(preparerBuild(item.build), {
+        shareButton: true,
+        removeSharedId: item.id
+      }));
+    });
+  }
+
   function image(path, className, alt) {
     const url = icone(path);
     if (!url) return null;
@@ -358,28 +415,53 @@
     lower.appendChild(bonusPanel);
     card.append(statSection, lower);
 
-    if (opts.shareButton) {
+    if (opts.shareButton || opts.publishButton || opts.removeSharedId) {
       const actions = document.createElement("div");
       actions.className = "shared-actions";
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = "Copier le lien de partage";
       const status = document.createElement("span");
       status.className = "shared-copy-status";
-      button.addEventListener("click", async function () {
-        button.disabled = true;
-        status.textContent = "Préparation du lien…";
-        try {
-          const url = await creerLien(build);
-          await copier(url);
-          status.textContent = "Lien copié. Envoie-le à la personne avec qui tu veux partager ce build.";
-        } catch (erreur) {
-          status.textContent = erreur.message || "Impossible de copier le lien.";
-        } finally {
-          button.disabled = false;
-        }
-      });
-      actions.append(button, status);
+
+      if (opts.shareButton || opts.publishButton) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = opts.publishButton ? "Partager ce build" : "Copier le lien de partage";
+        button.addEventListener("click", async function () {
+          button.disabled = true;
+          status.textContent = "Préparation du lien…";
+          try {
+            const url = await creerLien(build);
+            await copier(url);
+            if (opts.publishButton) {
+              const ajoute = ajouterBuildPartage(build);
+              status.textContent = ajoute
+                ? "Build ajouté à « Mes builds partagés » et lien copié. Envoie-le à la personne de ton choix."
+                : "Ce build est déjà dans « Mes builds partagés » ; son lien a été copié.";
+              afficherBuildsPartages();
+            } else {
+              status.textContent = "Lien copié. Envoie-le à la personne avec qui tu veux partager ce build.";
+            }
+          } catch (erreur) {
+            status.textContent = erreur.message || "Impossible de préparer le partage.";
+          } finally {
+            button.disabled = false;
+          }
+        });
+        actions.appendChild(button);
+      }
+
+      if (opts.removeSharedId) {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "secondary";
+        remove.textContent = "Retirer de mes partages";
+        remove.addEventListener("click", function () {
+          retirerBuildPartage(opts.removeSharedId);
+          afficherBuildsPartages();
+        });
+        actions.appendChild(remove);
+      }
+
+      actions.appendChild(status);
       card.appendChild(actions);
     }
     return card;
@@ -423,16 +505,18 @@
         message.textContent = erreur.message || "Ce lien de partage ne peut pas être ouvert.";
       }
     }
+
+    afficherBuildsPartages();
     const builds = lireBuildsLocaux();
     if (!builds.length) {
       const empty = document.createElement("p");
       empty.className = "shared-empty-card";
-      empty.textContent = "Les builds enregistrés sur cet appareil apparaîtront ici. Crée et sauvegarde un build depuis le générateur pour obtenir son lien de partage.";
+      empty.textContent = "Aucun build sauvegardé sur cet appareil. Crée et sauvegarde un build dans le générateur ; il restera privé jusqu’à ce que tu choisisses « Partager ce build ».";
       listeBuilds.appendChild(empty);
       return;
     }
     builds.slice().reverse().forEach(function (build) {
-      listeBuilds.appendChild(rendreBuild(preparerBuild(build), { shareButton: true }));
+      listeBuilds.appendChild(rendreBuild(preparerBuild(build), { publishButton: true }));
     });
   }
 
