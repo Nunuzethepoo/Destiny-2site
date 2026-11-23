@@ -1737,7 +1737,8 @@
         definitionsLite = definitions.objetsLite || {};
 
         for (const element of objets) {
-          const definition = definitions.objets[element.objet.itemHash] || definitionsLite[element.objet.itemHash];
+          const definitionLite = definitionsLite[element.objet.itemHash];
+          const definition = definitions.objets[element.objet.itemHash] || definitionLite;
           const bucket = Number(definition && definition.inventory && definition.inventory.bucketTypeHash) || Number(element.objet.bucketHash);
           const slotArme = BUCKETS_ARMES[bucket];
           if (slotArme && element.objet.itemInstanceId) {
@@ -1771,7 +1772,7 @@
           const stats = lireStats(statsObjets, element.objet.itemInstanceId);
 
           toutesLesArmures.push({
-            nom: definition.displayProperties.name,
+            nom: definitionLite && definitionLite.displayProperties && definitionLite.displayProperties.name || definition.displayProperties.name,
             icone: definition.displayProperties.icon,
             emplacement: emplacement,
             classe: definition.classType,
