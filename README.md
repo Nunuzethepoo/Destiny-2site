@@ -14,7 +14,7 @@ GitHub Pages n’exécute pas de code serveur. `worker.js` est le relais Cloudfl
 2. Dans les paramètres du Worker, configure la variable `SITE_ORIGIN` avec l’origine du site, sans chemin. Pour le domaine GitHub Pages par défaut : `https://nunuzethepoo.github.io`. Si tu utilises un domaine personnalisé, entre son origine à la place.
 3. Dans **Settings → Variables and Secrets**, ajoute `BUNGIE_CLIENT_ID` avec la valeur `56963` et `BUNGIE_API_KEY` comme **Secret** avec ta clé API actuellement valide.
 4. Dans le portail développeur Bungie, configure le client `56963` en client public, avec l’URL de retour exacte : `https://nunuzethepoo.github.io/Destiny-2site/oauth.html`. Active `ReadDestinyInventoryAndVault`, `MoveEquipDestinyItems` et `Read Group/Clan Forums, Wall and Members` pour que l’onglet Clan puisse lire le clan connecté. N’ajoute pas de paramètre OAuth `scope` à l’URL.
-5. Remplace/publie les fichiers modifiés du site dans le dépôt GitHub. Ouvre la page `oauth.html`, colle l’URL `https://NOM-DU-WORKER.NOM-DE-COMPTE.workers.dev`, puis clique **Connecter mon compte**.
+5. Ouvre `oauth.html` et clique **Connecter mon compte** : le relais Cloudflare VIGIE est préconfiguré. Si tu remplaces ton Worker, ouvre « Changer l’URL du relais » pour saisir sa nouvelle adresse.
 
 Un client Bungie public ne reçoit pas de jeton de renouvellement. Si sa session expire, reconnecte-toi depuis `oauth.html`. Le jeton n’est stocké que dans `sessionStorage` pour l’onglet en cours.
 
@@ -27,7 +27,7 @@ Un client Bungie public ne reçoit pas de jeton de renouvellement. Si sa session
 ## Fichiers
 
 - `index.html` — accueil Arsenal VIGIE.
-- `oauth.html` — connexion OAuth Bungie et configuration de l’URL du Worker.
+- `oauth.html` — connexion OAuth Bungie avec le relais Cloudflare VIGIE préconfiguré.
 - `bungie-api.js` — client navigateur, sans clé API.
 - `worker.js` — relais Cloudflare.
 - `vigie.css` et `vigie-shell.js` — thème commun et navigation des pages.
