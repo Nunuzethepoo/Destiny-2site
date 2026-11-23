@@ -2,7 +2,9 @@
   "use strict";
 
   const CLASSES = { 0: "Titan", 1: "Chasseur", 2: "Arcaniste" };
-  const STATS = ["Mobilité", "Résistance", "Récupération", "Discipline", "Intellect", "Force"];
+  // Même ordre que STATS_ARMURE du générateur : les anciennes positions sont converties vers Armor 3.0.
+  const STATS = ["Armes", "Santé", "Classe", "Grenade", "Super", "Mêlée"];
+  const MAX_STAT = 200;
   const ARMURE = [
     { bucket: 3448274439, nom: "Casque" },
     { bucket: 3551918588, nom: "Gants" },
@@ -290,9 +292,10 @@
       const y = 235 + index * 53, valeur = number((build.stats || [])[index]);
       texte(nom.toUpperCase(), 774, y, "700 11px Arial", "#b5c0ca", 130);
       ctx.fillStyle = "#25313c"; ctx.fillRect(904, y + 2, 175, 10);
-      ctx.fillStyle = couleurClasse; ctx.fillRect(904, y + 2, 175 * Math.max(0, Math.min(100, valeur)) / 100, 10);
+      ctx.fillStyle = couleurClasse; ctx.fillRect(904, y + 2, 175 * Math.max(0, Math.min(MAX_STAT, valeur)) / MAX_STAT, 10);
+      ctx.strokeStyle = "#d5a748"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(991.5, y + 1); ctx.lineTo(991.5, y + 13); ctx.stroke();
       texte(String(valeur), 1092, y - 5, "700 22px Arial", "#f0d8a6", 52);
-      texte("PALIER " + Math.floor(valeur / 10), 1092, y + 21, "600 9px Arial", "#7f8d9a", 64);
+      texte(valeur > 100 ? "RENFORCÉ" : "BASE", 1092, y + 21, "600 9px Arial", "#7f8d9a", 64);
     });
     const bonus = build.bonus ? build.bonus.name + (build.bonus.count ? " · " + build.bonus.count + " pièces" : "") : "Aucun bonus de set sélectionné";
     ctx.strokeStyle = "#ffffff22"; ctx.beginPath(); ctx.moveTo(48, 566); ctx.lineTo(1144, 566); ctx.stroke();
@@ -392,7 +395,7 @@
       const amount = document.createElement("strong");
       amount.textContent = String(value);
       const tier = document.createElement("small");
-      tier.textContent = "PALIER " + Math.floor(value / 10);
+      tier.textContent = value > 100 ? "RENFORCÉ · 101–200" : "BASE · 0–100";
       cell.append(label, amount, tier);
       statGrid.appendChild(cell);
     });
