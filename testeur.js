@@ -392,6 +392,9 @@
       row.weaponTitle = title;
       row.weaponMeta = meta;
       ["rpm", "magazine", "reloadStat"].forEach(function (key) { row.inputs[key].value = ""; });
+      row.inputs.rpm.dataset.manual = "";
+      row.inputs.magazine.dataset.manual = "";
+      row.inputs.reload.value = "";
       row.update();
       return;
     }
