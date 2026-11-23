@@ -64,7 +64,7 @@
     .shared-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:11px;border-top:1px solid #ffffff14}
     .shared-actions button{min-height:40px;padding:9px 14px;border:1px solid #90d7d9;border-radius:3px;background:linear-gradient(110deg,#8bd8dc,#b9ebea);color:#0b1719;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:filter .18s,transform .18s}
     .shared-actions button:hover{filter:brightness(1.08);transform:translateY(-1px)}
-    .shared-actions button:disabled{cursor:wait;opacity:.7}
+    .shared-actions button:disabled{cursor:wait;opacity:.7}.shared-actions button.secondary{border-color:#53616e;background:linear-gradient(110deg,#1b2731,#111820);color:#c4ced7}
     .shared-copy-status{color:#9fd8d9;font-size:10px;line-height:1.5}
     #partageMessage{display:none;margin:12px 0;padding:12px;border:1px solid #d6756844;background:#d675680d;color:#efaaa0;font-size:11px;line-height:1.6}
     #partageMessage:not([hidden]){display:block}
@@ -78,14 +78,16 @@
   <header class="share-hero">
     <span class="share-eyebrow">Construis · montre · partage</span>
     <h1>Partager un build</h1>
-    <p id="partageIntro" class="share-intro">Choisis un build sauvegardé pour créer un lien autonome. La personne qui l’ouvre verra l’équipement, les stats, les aptitudes et le bonus de set sur une seule fiche.</p>
+    <p id="partageIntro" class="share-intro">Tes builds restent privés après leur sauvegarde. Choisis toi-même ceux que tu veux partager : ils apparaîtront alors dans ta liste de builds partagés et tu pourras envoyer leur lien.</p>
     <div class="share-hero-tags" aria-label="Contenu du lien"><span>Équipement complet</span><span>Stats et mods</span><span>Doctrine et bonus</span></div>
   </header>
-  <aside class="share-privacy"><span class="share-privacy-icon" aria-hidden="true">◇</span><div><strong>Ce que le lien partage</strong><p>Il contient une copie des choix du build pour l’afficher sans connexion. Ton identifiant Bungie et les identifiants de tes objets n’y figurent pas. Toute personne qui reçoit le lien peut voir cette fiche.</p></div></aside>
+  <aside class="share-privacy"><span class="share-privacy-icon" aria-hidden="true">◇</span><div><strong>Tu gardes le contrôle</strong><p>Un build sauvegardé n’est pas partagé automatiquement. Seuls les builds pour lesquels tu cliques sur « Partager ce build » apparaissent dans ta liste partagée. Le lien copié contient la fiche du build ; toute personne qui le reçoit peut la consulter.</p></div></aside>
   <p id="partageMessage" role="alert" hidden></p>
   <section id="buildPartage" aria-label="Build reçu"></section>
-  <header class="share-section-heading"><div><span>Sur cet appareil</span><h2>Mes builds enregistrés</h2></div><p>Copie un lien pour partager une fiche complète.</p></header>
-  <section id="buildsLocaux" aria-label="Builds sauvegardés sur cet appareil"></section>
+  <header class="share-section-heading"><div><span>Choisis de les partager</span><h2>Mes builds partagés</h2></div><p>Seuls les builds que tu as partagés volontairement apparaissent ici.</p></header>
+  <section id="buildsPartages" aria-label="Builds partagés volontairement sur cet appareil"></section>
+  <header class="share-section-heading"><div><span>Privés tant que tu ne les partages pas</span><h2>Mes builds sauvegardés</h2></div><p>Utilise « Partager ce build » pour l’ajouter à la liste ci-dessus et copier son lien.</p></header>
+  <section id="buildsLocaux" aria-label="Builds sauvegardés privés sur cet appareil"></section>
   <p><a href="generateur.html">Créer un build</a> · <a href="equiper.html">Voir mes builds à équiper</a></p>
   <script src="builds-partage.js"></script>
   <script>VIGIE_PARTAGE.initialiser();</script>
