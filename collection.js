@@ -306,12 +306,12 @@
   function render() {
     const query = normalize(el.search.value);
     const type = el.type.value;
-    const tier = el.tier.value;
+    const selectedGodRollTier = el.tier.value;
     const selectedPerk = el.perk.value;
     const onlyRecommended = el.onlyRecommended.checked;
     const filtered = weapons.filter(function (weapon) {
       if (type && weapon.type !== type) return false;
-      if (tier && String(weapon.tierType) !== tier) return false;
+      if (selectedGodRollTier && !(weapon.rolls || []).some(function (roll) { return normalize(roll.tier) === selectedGodRollTier; })) return false;
       if (onlyRecommended && !weapon.rolls.length) return false;
       if (selectedPerk && !(weapon.rolls || []).some(function (roll) {
         return (roll.perks || []).some(function (perk) {
@@ -351,13 +351,27 @@
   }
 
   function fillTiers() {
-    const tiers = Array.from(new Set(weapons.map(function (weapon) {
-      return Number(weapon.tierType) || 0;
-    }).filter(function (tierType) { return tierType > 0 && TIER_FR[tierType]; }))).sort(function (a, b) { return b - a; });
-    tiers.forEach(function (tierType) {
+    const parCle = new Map();
+    weapons.forEach(function (weapon) {
+      (weapon.rolls || []).forEach(function (roll) {
+        const libelle = String(roll.tier || "").trim();
+        const cle = normalize(libelle);
+        if (cle && !parCle.has(cle)) parCle.set(cle, libelle);
+      });
+    });
+    const ordre = ["S+", "S", "S-", "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D", "F"];
+    const tiers = Array.from(parCle.values()).sort(function (a, b) {
+      const indexA = ordre.indexOf(a.toUpperCase());
+      const indexB = ordre.indexOf(b.toUpperCase());
+      if (indexA >= 0 && indexB >= 0) return indexA - indexB;
+      if (indexA >= 0) return -1;
+      if (indexB >= 0) return 1;
+      return a.localeCompare(b, "fr", { numeric: true });
+    });
+    tiers.forEach(function (libelle) {
       const option = document.createElement("option");
-      option.value = String(tierType);
-      option.textContent = TIER_FR[tierType];
+      option.value = normalize(libelle);
+      option.textContent = libelle;
       el.tier.appendChild(option);
     });
   }
