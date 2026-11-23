@@ -4,8 +4,7 @@
   const SKIP_TABS = new Set(["Shopping List", "Archetypes", "Experimental", "Exotic Armor", "Builds", "Perks", "Origin Traits", "Set Bonuses", "Artifact Mods", "Fragments", "Aspects", "Subclasses", "Encounters", "Transitions", "Raid Mods"]);
   const BUCKETS_ARMES = new Set([1498876634, 2465295065, 953998645]);
   const TTL = 30 * 60 * 1000;
-  const CACHE_KEY = "vigieCollectionGodRollsV3";
-  const CACHE_KEY_LEGACY = "vigieCollectionGodRollsV2";
+  const CACHE_KEY = "vigieCollectionGodRollsV4";
   const PAGE_SIZE = 60;
   const el = {
     status: document.getElementById("collectionStatus"),
@@ -22,6 +21,10 @@
 
   function normalize(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("en").replace(/[’‘]/g, "'").replace(/\s+/g, " ").trim();
+  }
+
+  function compteNomsFrancais(catalog) {
+    return catalog.filter(function (weapon) { return weapon.name && weapon.nameEn && weapon.name !== weapon.nameEn; }).length;
   }
 
   function escapeHtml(value) {
@@ -337,12 +340,12 @@
 
   async function init() {
     try {
-      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || localStorage.getItem(CACHE_KEY_LEGACY) || "null");
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
       if (cached && Date.now() - cached.savedAt < TTL && Array.isArray(cached.catalog) && cached.catalog.length && Array.isArray(cached.recommendations)) {
         traductionsPerks = cached.perkTranslations || {};
         weapons = addRecommendations(cached.catalog, cached.recommendations, traductionsPerks);
         afficherToutSiAucunRoll();
-        el.status.textContent = "Catalogue en cache · mise à jour des recommandations dans " + Math.max(1, Math.round((TTL - (Date.now() - cached.savedAt)) / 60000)) + " min.";
+        el.status.textContent = "Catalogue en cache · " + compteNomsFrancais(cached.catalog) + " nom(s) français distinct(s) · mise à jour dans " + Math.max(1, Math.round((TTL - (Date.now() - cached.savedAt)) / 60000)) + " min.";
         fillTypes(); fillPerks(); render();
         try { localStorage.setItem(CACHE_KEY, JSON.stringify(cached)); } catch (_) {}
         return;
@@ -378,7 +381,7 @@
       ? catalog.length + " armes recommandées affichées en mode de secours. Vérifie l’URL du Worker dans Connexion Bungie pour restaurer le catalogue complet."
       : avertissements.length
         ? avertissements.join(" · ") + " · " + catalog.length + " arme(s) chargée(s)"
-        : catalog.length + " armes du catalogue Bungie · " + recommendations.length + " rolls PvE communautaires.";
+        : catalog.length + " armes du catalogue Bungie · " + compteNomsFrancais(catalog) + " nom(s) français distinct(s) · " + recommendations.length + " rolls PvE communautaires." ;
   }
 
   el.search.addEventListener("input", function () { visibleLimit = PAGE_SIZE; render(); });
