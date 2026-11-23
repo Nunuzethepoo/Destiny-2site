@@ -4,7 +4,7 @@
   const SKIP_TABS = new Set(["Shopping List", "Archetypes", "Experimental", "Exotic Armor", "Builds", "Perks", "Origin Traits", "Set Bonuses", "Artifact Mods", "Fragments", "Aspects", "Subclasses", "Encounters", "Transitions", "Raid Mods"]);
   const BUCKETS_ARMES = new Set([1498876634, 2465295065, 953998645]);
   const TTL = 30 * 60 * 1000;
-  const CACHE_KEY = "vigieCollectionGodRollsV4";
+  const CACHE_KEY = "vigieCollectionGodRollsV5";
   const PAGE_SIZE = 60;
   const el = {
     status: document.getElementById("collectionStatus"),
@@ -148,28 +148,55 @@
     const type = "DestinyInventoryItemLiteDefinition";
     const cheminsManifest = manifest.jsonWorldComponentContentPaths || {};
     const cheminsEn = cheminsManifest.en || {};
-    const cheminsFr = cheminsManifest.fr || {};
+    const localeFr = Object.keys(cheminsManifest).find(function (locale) {
+      const normalizedLocale = locale.toLowerCase();
+      return normalizedLocale === "fr" || normalizedLocale.indexOf("fr-") === 0;
+    });
+    const cheminsFr = cheminsManifest.fr || (localeFr ? cheminsManifest[localeFr] : {}) || {};
     const pathEn = cheminsEn[type] || cheminsEn.DestinyInventoryItemDefinition;
-    const pathFr = cheminsFr[type] || cheminsFr.DestinyInventoryItemDefinition;
+    const pathFrLite = cheminsFr[type];
+    const pathFrComplet = cheminsFr.DestinyInventoryItemDefinition;
+    const pathFr = pathFrLite || pathFrComplet;
     if (!pathEn) throw new Error("Bungie n’a pas renvoyé le catalogue des armes.");
     async function chargerDefinitions(path) {
       const response = await VIGIE_BUNGIE.fetchPublic(path);
       if (!response.ok) throw new Error("HTTP " + response.status);
       return response.json();
     }
-    const [defsEn, defsFr] = await Promise.all([
+    const [defsEn, defsFrChargees] = await Promise.all([
       chargerDefinitions(pathEn),
       pathFr ? chargerDefinitions(pathFr).catch(function () { return {}; }) : Promise.resolve({})
     ]);
+    let defsFr = defsFrChargees || {};
+    function compterNomsTraduits(definitionsFr) {
+      return Object.keys(defsEn).filter(function (hash) {
+        const english = defsEn[hash];
+        const french = definitionsFr[hash];
+        const nomEn = english && english.displayProperties && english.displayProperties.name;
+        const nomFr = french && french.displayProperties && french.displayProperties.name;
+        return english && english.itemType === 3 && english.inventory &&
+          BUCKETS_ARMES.has(Number(english.inventory.bucketTypeHash)) &&
+          nomEn && nomFr && nomFr.trim() && nomFr.trim() !== nomEn.trim();
+      }).length;
+    }
+    if (!compterNomsTraduits(defsFr) && pathFrComplet && pathFrComplet !== pathFr) {
+      el.status.textContent = "La table française légère ne contient pas de noms traduits ; chargement de la table Bungie complète…";
+      try {
+        defsFr = await chargerDefinitions(pathFrComplet);
+      } catch (_) {
+        defsFr = {};
+      }
+    }
     const nomsParHash = {};
     const parNomAnglais = {};
     Object.keys(defsEn).forEach(function (hash) {
       const english = defsEn[hash];
       const french = defsFr[hash];
-      if (!english || !english.displayProperties || !english.displayProperties.name || !french || !french.displayProperties || !french.displayProperties.name) return;
-      nomsParHash[hash] = french.displayProperties.name;
+      const nomFr = french && french.displayProperties && french.displayProperties.name;
+      if (!english || !english.displayProperties || !english.displayProperties.name || !nomFr || !nomFr.trim()) return;
+      nomsParHash[hash] = nomFr.trim();
       const englishKey = normalize(english.displayProperties.name);
-      if (!parNomAnglais[englishKey]) parNomAnglais[englishKey] = french.displayProperties.name;
+      if (!parNomAnglais[englishKey]) parNomAnglais[englishKey] = nomFr.trim();
     });
     traductionsPerks = parNomAnglais;
     return Object.values(defsEn).filter(function (definition) {
