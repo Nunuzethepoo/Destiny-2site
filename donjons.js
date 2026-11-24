@@ -101,7 +101,7 @@ const DONJONS=[{"id":"shattered-throne","name":"Le Trône brisé","original":"Th
       var link=el("a","room-photo-link");
       var imageUrl="https://vigie-bungie-api.loic-reniau.workers.dev/image?url="+encodeURIComponent(photo.url)+"&ref="+encodeURIComponent(photo.source);
       link.href=imageUrl;link.target="_blank";link.rel="noopener noreferrer";link.setAttribute("aria-label","Ouvrir la capture en taille réelle");
-      var img=document.createElement("img");img.className="room-photo";img.src=imageUrl;img.alt=photo.alt;img.loading="lazy";img.decoding="async";img.referrerPolicy="strict-origin-when-cross-origin";
+      var img=document.createElement("img");img.className="room-photo";img.dataset.guideImageId=photo.url;img.src=imageUrl;img.alt=photo.alt;img.loading="lazy";img.decoding="async";img.referrerPolicy="strict-origin-when-cross-origin";
       img.addEventListener("error",function(){img.alt="La capture ne peut pas être chargée depuis son site source.";img.classList.add("room-photo-error");});
       link.appendChild(img);figure.appendChild(link);
       var caption=el("figcaption","room-caption");
