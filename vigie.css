@@ -105,3 +105,6 @@ body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.11;ba
 .page .guide-editor-map-label input[type="file"]:focus-visible{outline:1px solid var(--gold);border-color:var(--gold)}
 .page .guide-editor-map-label input[type="file"]:disabled{opacity:.55;cursor:wait}
 .guide-editor-file-hint{color:#8e9ba9;font-size:9px;font-weight:400;letter-spacing:0;line-height:1.55;text-transform:none}
+.guide-image-control{display:inline-flex;align-items:center;justify-content:center;min-height:34px;margin:8px 0 12px;padding:0 11px;border:1px solid #bd665a88;border-radius:2px;background:#7e28242b;color:#f0a79d;font:700 9px 'DM Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.guide-image-control:hover{border-color:#e18b7e;background:#7e28245e;color:#fff1ee}
+.guide-image-control:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
