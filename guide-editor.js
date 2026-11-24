@@ -201,6 +201,10 @@
         }
         urls.push(imageUrl);
       }
+      const rec = record("main", true);
+      rec.mapUrls = urls;
+      delete rec.mapUrl;
+      persist("Images importées dans le brouillon. Clique sur « Publier pour tout le monde » pour les partager.");
       mapInput.value = urls.join("\n");
       applyMaps(urls);
       imageFileInput.value = "";
