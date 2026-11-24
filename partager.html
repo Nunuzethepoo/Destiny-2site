@@ -73,6 +73,8 @@
     .shared-actions button{min-height:40px;padding:9px 14px;border:1px solid #90d7d9;border-radius:3px;background:linear-gradient(110deg,#8bd8dc,#b9ebea);color:#0b1719;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:filter .18s,transform .18s}
     .shared-actions button:hover{filter:brightness(1.08);transform:translateY(-1px)}
     .shared-actions button:disabled{cursor:wait;opacity:.7}.shared-actions button.secondary{border-color:#53616e;background:linear-gradient(110deg,#1b2731,#111820);color:#c4ced7}
+    .shared-actions button.danger{border-color:#955653;background:linear-gradient(110deg,#351a1d,#211217);color:#f0b8af}
+    .shared-actions button.danger:hover{border-color:#cc7770;filter:brightness(1.08)}
     .shared-copy-status{color:#9fd8d9;font-size:10px;line-height:1.5}
     #partageMessage{display:none;margin:12px 0;padding:12px;border:1px solid #d6756844;background:#d675680d;color:#efaaa0;font-size:11px;line-height:1.6}
     #partageMessage:not([hidden]){display:block}
@@ -99,7 +101,7 @@
   <section id="buildsLocaux" aria-label="Builds sauvegardés privés sur cet appareil"></section>
   <p><a href="generateur.html">Créer un build</a> · <a href="equiper.html">Voir mes builds à équiper</a></p>
   <script src="bungie-api.js?v=share-fr-20261124-1"></script>
-  <script src="builds-partage.js?v=share-fr-20261124-1"></script>
+  <script src="builds-partage.js?v=share-fr-20261124-2"></script>
   <script>VIGIE_PARTAGE.initialiser();</script>
 </body>
 </html>
