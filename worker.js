@@ -60,7 +60,17 @@ function cleanGuideBucket(source) {
         }
       } catch (_) {}
     }
-    result[id] = { fields, mapUrls };
+    const hiddenImages = [];
+    for (const imageId of Array.isArray(record.hiddenImages) ? record.hiddenImages.slice(0, 24) : []) {
+      if (typeof imageId !== "string" || imageId.length > 2048) continue;
+      try {
+        const parsed = new URL(imageId);
+        if (parsed.protocol === "https:" && parsed.hostname && !parsed.username && !parsed.password && !hiddenImages.includes(parsed.toString())) {
+          hiddenImages.push(parsed.toString());
+        }
+      } catch (_) {}
+    }
+    result[id] = { fields, mapUrls, hiddenImages };
   }
   return result;
 }
