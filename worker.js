@@ -75,6 +75,108 @@ function cleanGuideData(input) {
   };
 }
 
+
+async function verifyGuideEditor(request, env, siteOrigin) {
+  if (!env.BUNGIE_API_KEY || !env.VIGIE_GUIDE_EDITOR_ID) {
+    return { response: fail("La publication des guides n’est pas configurée", 503, siteOrigin) };
+  }
+  const authorization = request.headers.get("Authorization") || "";
+  const bearer = authorization.match(/^Bearer\s+(.+)$/i);
+  if (!bearer || bearer[1].length > 5000) {
+    return { response: fail("Connecte-toi à Bungie pour publier les guides", 401, siteOrigin) };
+  }
+  const identityResponse = await fetch(API + "/User/GetMembershipsForCurrentUser/", {
+    headers: { "X-API-Key": env.BUNGIE_API_KEY, "Authorization": "Bearer " + bearer[1], "Accept": "application/json" }
+  });
+  if (!identityResponse.ok) {
+    return { response: fail("La session Bungie a expiré. Reconnecte-toi puis réessaie.", 401, siteOrigin) };
+  }
+  let identity;
+  try {
+    identity = await identityResponse.json();
+  } catch (_) {
+    return { response: fail("Bungie n’a pas retourné un profil valide", 502, siteOrigin) };
+  }
+  const editorId = String(identity && identity.Response && identity.Response.bungieNetUser && identity.Response.bungieNetUser.membershipId || "");
+  if (!editorId || editorId !== String(env.VIGIE_GUIDE_EDITOR_ID)) {
+    return { response: fail("Ce compte Bungie n’est pas autorisé à publier les guides", 403, siteOrigin) };
+  }
+  return { ok: true };
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(encoded) {
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function uploadGuideImage(request, env, siteOrigin) {
+  if (!env.VIGIE_GUIDES) return fail("La sauvegarde partagée des guides n’est pas configurée", 503, siteOrigin);
+  const authorization = await verifyGuideEditor(request, env, siteOrigin);
+  if (!authorization.ok) return authorization.response;
+
+  let form;
+  try {
+    form = await request.formData();
+  } catch (_) {
+    return fail("Le fichier envoyé n’est pas valide", 400, siteOrigin);
+  }
+  const file = form.get("image");
+  if (!file || typeof file === "string" || typeof file.arrayBuffer !== "function") {
+    return fail("Choisis une image à importer", 400, siteOrigin);
+  }
+  if (file.size < 1 || file.size > 5 * 1024 * 1024) {
+    return fail("Chaque image doit faire au maximum 5 Mo", 413, siteOrigin);
+  }
+  const extensions = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/gif": "gif"
+  };
+  const extension = extensions[String(file.type || "").toLowerCase()];
+  if (!extension) return fail("Formats acceptés : PNG, JPEG, WebP et GIF", 415, siteOrigin);
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const encoded = bytesToBase64(bytes);
+  const id = crypto.randomUUID();
+  const key = "guide-image-v1:" + id + "." + extension;
+  await env.VIGIE_GUIDES.put(key, encoded);
+  const imageUrl = new URL("/guides/images/" + id + "." + extension, request.url).toString();
+  return reply({ url: imageUrl }, 201, siteOrigin);
+}
+
+async function serveGuideImage(request, env, siteOrigin, url) {
+  if (!siteOrigin) return fail("Origin non autorisée", 403, "null");
+  const origin = request.headers.get("Origin") || "";
+  if (origin && origin !== siteOrigin) return fail("Origin non autorisée", 403, siteOrigin);
+  if (request.method !== "GET") return fail("Méthode non autorisée", 405, siteOrigin);
+  if (!env.VIGIE_GUIDES) return fail("La sauvegarde partagée des guides n’est pas configurée", 503, siteOrigin);
+  const match = url.pathname.match(/^\/guides\/images\/([0-9a-f-]{36})\.(png|jpg|webp|gif)$/i);
+  if (!match) return fail("Image introuvable", 404, siteOrigin);
+  const key = "guide-image-v1:" + match[1] + "." + match[2].toLowerCase();
+  const encoded = await env.VIGIE_GUIDES.get(key);
+  if (!encoded) return fail("Image introuvable", 404, siteOrigin);
+  const contentTypes = { png: "image/png", jpg: "image/jpeg", webp: "image/webp", gif: "image/gif" };
+  const headers = new Headers({
+    "content-type": contentTypes[match[2].toLowerCase()],
+    "cache-control": "public, max-age=31536000, immutable",
+    "x-content-type-options": "nosniff",
+    "access-control-allow-origin": siteOrigin,
+    "vary": "Origin"
+  });
+  return new Response(base64ToBytes(encoded), { status: 200, headers });
+}
+
 async function handleSharedGuides(request, env, siteOrigin) {
   if (!env.VIGIE_GUIDES) return fail("La sauvegarde partagée des guides n’est pas configurée", 503, siteOrigin);
   const key = "shared-guides-v1";
@@ -89,19 +191,8 @@ async function handleSharedGuides(request, env, siteOrigin) {
     }
   }
   if (request.method !== "PUT") return fail("Méthode non autorisée", 405, siteOrigin);
-  if (!env.BUNGIE_API_KEY || !env.VIGIE_GUIDE_EDITOR_ID) return fail("La publication des guides n’est pas configurée", 503, siteOrigin);
-  const authorization = request.headers.get("Authorization") || "";
-  const bearer = authorization.match(/^Bearer\s+(.+)$/i);
-  if (!bearer || bearer[1].length > 5000) return fail("Connecte-toi à Bungie pour publier les guides", 401, siteOrigin);
-
-  const identityResponse = await fetch(API + "/User/GetMembershipsForCurrentUser/", {
-    headers: { "X-API-Key": env.BUNGIE_API_KEY, "Authorization": "Bearer " + bearer[1], "Accept": "application/json" }
-  });
-  if (!identityResponse.ok) return fail("La session Bungie a expiré. Reconnecte-toi puis réessaie.", 401, siteOrigin);
-  let identity;
-  try { identity = await identityResponse.json(); } catch (_) { return fail("Bungie n’a pas retourné un profil valide", 502, siteOrigin); }
-  const editorId = String(identity && identity.Response && identity.Response.bungieNetUser && identity.Response.bungieNetUser.membershipId || "");
-  if (!editorId || editorId !== String(env.VIGIE_GUIDE_EDITOR_ID)) return fail("Ce compte Bungie n’est pas autorisé à publier les guides", 403, siteOrigin);
+  const authorization = await verifyGuideEditor(request, env, siteOrigin);
+  if (!authorization.ok) return authorization.response;
 
   const raw = await request.text();
   if (raw.length > 1000000) return fail("La sauvegarde dépasse la taille maximale autorisée", 413, siteOrigin);
@@ -114,113 +205,6 @@ async function handleSharedGuides(request, env, siteOrigin) {
   return reply({ ok: true, updatedAt }, 200, siteOrigin);
 }
 
-function allowedPath(path, method) {
-  if (path.startsWith("/common/destiny2_content/json/")) return method === "GET";
-  if (!path.startsWith("/Platform/")) return false;
-  if (method === "GET") {
-    return path.startsWith("/Platform/Destiny2/") ||
-      path.startsWith("/Platform/User/GetMembershipsForCurrentUser/") ||
-      path.startsWith("/Platform/User/GetMembershipsById/") ||
-      /^\/Platform\/GroupV2\/User\/\d+\/\d+\/\d+\/\d+\/$/.test(path.split("?")[0]) ||
-      /^\/Platform\/GroupV2\/\d+\/Members\/$/.test(path.split("?")[0]);
-  }
-  return method === "POST" && /^\/Platform\/Destiny2\/Actions\/Items\/(TransferItem|EquipItem|EquipItems|InsertSocketPlugFree)\/$/.test(path);
-}
-
-
-async function proxyDungeonImage(request, url, siteOrigin) {
-  const headers = {
-    "cache-control": "no-store",
-    "access-control-allow-origin": siteOrigin || "null",
-    "cross-origin-resource-policy": "cross-origin",
-    "x-content-type-options": "nosniff",
-    "vary": "Origin"
-  };
-  const failImage = (message, status) => new Response(message, {
-    status,
-    headers: { ...headers, "content-type": "text/plain; charset=utf-8" }
-  });
-  if (request.method !== "GET") return failImage("Méthode non autorisée", 405);
-  let refererOrigin = "";
-  try { refererOrigin = new URL(request.headers.get("Referer") || "").origin; } catch {}
-  if (!siteOrigin || (request.headers.get("Origin") !== siteOrigin && refererOrigin !== siteOrigin)) {
-    return failImage("Origine non autorisée", 403);
-  }
-  const imageUrl = url.searchParams.get("url") || "";
-  const sourceUrl = url.searchParams.get("ref") || "";
-  if (!IMAGE_URLS.has(imageUrl) || !IMAGE_REFERENCES.has(sourceUrl)) {
-    return failImage("Capture inconnue", 404);
-  }
-  let upstream;
-  try {
-    upstream = await fetch(imageUrl, {
-      headers: {
-        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-        "referer": sourceUrl
-      }
-    });
-  } catch {
-    return failImage("Le site source ne répond pas", 502);
-  }
-  const contentType = (upstream.headers.get("content-type") || "").toLowerCase();
-  if (!upstream.ok || !contentType.startsWith("image/")) {
-    console.error("dungeon_image_source_error", new URL(imageUrl).hostname, upstream.status);
-    return failImage("La capture n’est pas disponible chez sa source", 502);
-  }
-  return new Response(upstream.body, {
-    status: 200,
-    headers: {
-      ...headers,
-      "content-type": contentType,
-      "cache-control": "public, max-age=86400, s-maxage=604800"
-    }
-  });
-}
-
-async function proxyBungieIcon(request, url, siteOrigin) {
-  const headers = {
-    "access-control-allow-origin": siteOrigin || "null",
-    "cross-origin-resource-policy": "cross-origin",
-    "x-content-type-options": "nosniff",
-    "vary": "Origin",
-    "cache-control": "public, max-age=86400, s-maxage=604800"
-  };
-  const failImage = (message, status) => new Response(message, {
-    status,
-    headers: { ...headers, "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" }
-  });
-  if (request.method !== "GET") return failImage("Méthode non autorisée", 405);
-  let refererOrigin = "";
-  try { refererOrigin = new URL(request.headers.get("Referer") || "").origin; } catch {}
-  if (!siteOrigin || (request.headers.get("Origin") !== siteOrigin && refererOrigin !== siteOrigin)) {
-    return failImage("Origine non autorisée", 403);
-  }
-  const assetPath = url.searchParams.get("path") || "";
-  const prefix = "/common/destiny2_content/icons/";
-  const iconName = assetPath.startsWith(prefix) ? assetPath.slice(prefix.length) : "";
-  const extension = iconName.split(".").pop().toLowerCase();
-  if (!iconName || assetPath.includes("..") || /[^A-Za-z0-9_./-]/.test(iconName) || !["png", "jpg", "jpeg", "webp"].includes(extension)) {
-    return failImage("Icône inconnue", 404);
-  }
-  let upstream;
-  try {
-    upstream = await fetch(new URL(assetPath, "https://www.bungie.net"), {
-      headers: { "accept": "image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8", "referer": "https://www.bungie.net/" }
-    });
-  } catch {
-    return failImage("Bungie ne répond pas", 502);
-  }
-  const contentType = (upstream.headers.get("content-type") || "").toLowerCase();
-  if (!upstream.ok || !contentType.startsWith("image/")) {
-    console.error("bungie_icon_source_error", upstream.status);
-    return failImage("L’icône Bungie n’est pas disponible", 502);
-  }
-  return new Response(upstream.body, {
-    status: 200,
-    headers: { ...headers, "content-type": contentType }
-  });
-}
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -228,6 +212,10 @@ export default {
     const siteOrigin = env.SITE_ORIGIN || "";
     if (url.pathname === "/image") return proxyDungeonImage(request, url, siteOrigin);
     if (url.pathname === "/destiny-icon") return proxyBungieIcon(request, url, siteOrigin);
+    if (url.pathname.startsWith("/guides/images/")) {
+      try { return await serveGuideImage(request, env, siteOrigin, url); }
+      catch (_) { return fail("Erreur lors du chargement de l’image du guide", 502, siteOrigin || "null"); }
+    }
     if (!siteOrigin || origin !== siteOrigin) return fail("Origin non autorisée", 403, siteOrigin || "null");
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: {
@@ -236,6 +224,10 @@ export default {
         "access-control-allow-headers": "Authorization, Content-Type",
         "access-control-max-age": "86400", "vary": "Origin"
       }});
+    }
+    if (url.pathname === "/guides/images" && request.method === "POST") {
+      try { return await uploadGuideImage(request, env, siteOrigin); }
+      catch (_) { return fail("Erreur lors de l’import de l’image", 502, siteOrigin); }
     }
     if (url.pathname === "/guides") {
       try { return await handleSharedGuides(request, env, siteOrigin); }
