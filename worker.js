@@ -16,7 +16,7 @@ function reply(data, status, origin) {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
       "access-control-allow-origin": origin,
-      "access-control-allow-methods": "GET, POST, PUT, OPTIONS",
+      "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
       "access-control-allow-headers": "Authorization, Content-Type",
       "vary": "Origin"
     }
@@ -177,6 +177,39 @@ async function serveGuideImage(request, env, siteOrigin, url) {
   return new Response(base64ToBytes(encoded), { status: 200, headers });
 }
 
+async function deleteGuideImage(request, env, siteOrigin, url) {
+  if (!siteOrigin || request.headers.get("Origin") !== siteOrigin) {
+    return fail("Origin non autorisée", 403, siteOrigin || "null");
+  }
+  if (request.method !== "DELETE") return fail("Méthode non autorisée", 405, siteOrigin);
+  if (!env.VIGIE_GUIDES) return fail("La sauvegarde partagée des guides n’est pas configurée", 503, siteOrigin);
+  const match = url.pathname.match(/^\/guides\/images\/([0-9a-f-]{36})\.(png|jpg|webp|gif)$/i);
+  if (!match) return fail("Image introuvable", 404, siteOrigin);
+  const id = match[1].toLowerCase();
+  const extension = match[2].toLowerCase();
+  const key = "guide-image-v1:" + id + "." + extension;
+  const imagePath = "/guides/images/" + id + "." + extension;
+  const raw = await env.VIGIE_GUIDES.get("shared-guides-v1");
+  if (raw) {
+    let saved;
+    try { saved = JSON.parse(raw); }
+    catch (_) { return fail("Impossible de vérifier les images encore utilisées", 500, siteOrigin); }
+    const edits = cleanGuideData(saved.edits);
+    if (!edits) return fail("Impossible de vérifier les images encore utilisées", 500, siteOrigin);
+    const stillUsed = ["raids", "dungeons", "dungeonMeta"].some(function (bucketName) {
+      return Object.values(edits[bucketName] || {}).some(function (record) {
+        return (record.mapUrls || []).some(function (imageUrl) {
+          try { return new URL(imageUrl).pathname.toLowerCase() === imagePath; }
+          catch (_) { return false; }
+        });
+      });
+    });
+    if (stillUsed) return fail("Cette image est encore utilisée par un guide.", 409, siteOrigin);
+  }
+  await env.VIGIE_GUIDES.delete(key);
+  return reply({ ok: true }, 200, siteOrigin);
+}
+
 async function handleSharedGuides(request, env, siteOrigin) {
   if (!env.VIGIE_GUIDES) return fail("La sauvegarde partagée des guides n’est pas configurée", 503, siteOrigin);
   const key = "shared-guides-v1";
@@ -319,15 +352,29 @@ export default {
     const siteOrigin = env.SITE_ORIGIN || "";
     if (url.pathname === "/image") return proxyDungeonImage(request, url, siteOrigin);
     if (url.pathname === "/destiny-icon") return proxyBungieIcon(request, url, siteOrigin);
+    if (url.pathname.startsWith("/guides/images/") && request.method === "OPTIONS") {
+      if (!siteOrigin || origin !== siteOrigin) return fail("Origin non autorisée", 403, siteOrigin || "null");
+      return new Response(null, { status: 204, headers: {
+        "access-control-allow-origin": siteOrigin,
+        "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "access-control-allow-headers": "Authorization, Content-Type",
+        "access-control-max-age": "86400", "vary": "Origin"
+      }});
+    }
     if (url.pathname.startsWith("/guides/images/")) {
-      try { return await serveGuideImage(request, env, siteOrigin, url); }
-      catch (_) { return fail("Erreur lors du chargement de l’image du guide", 502, siteOrigin || "null"); }
+      try {
+        if (request.method === "GET") return await serveGuideImage(request, env, siteOrigin, url);
+        if (request.method === "DELETE") return await deleteGuideImage(request, env, siteOrigin, url);
+        return fail("Méthode non autorisée", 405, siteOrigin || "null");
+      } catch (_) {
+        return fail(request.method === "DELETE" ? "Erreur lors de la suppression de l’image" : "Erreur lors du chargement de l’image du guide", 502, siteOrigin || "null");
+      }
     }
     if (!siteOrigin || origin !== siteOrigin) return fail("Origin non autorisée", 403, siteOrigin || "null");
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: {
         "access-control-allow-origin": siteOrigin,
-        "access-control-allow-methods": "GET, POST, PUT, OPTIONS",
+        "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
         "access-control-allow-headers": "Authorization, Content-Type",
         "access-control-max-age": "86400", "vary": "Origin"
       }});
