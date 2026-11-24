@@ -46,6 +46,8 @@
     .set-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .set-actions button, .editor-actions button { min-height: 38px; padding: 8px 12px; border: 1px solid #b9975d; border-radius: 3px; background: #d4ad680d; color: #e3c58e; font-weight: 700; cursor: pointer; }
     .set-actions button:hover, .editor-actions button:hover { background: #d4ad6822; }
+    .set-actions button.delete-set { border-color:#985255; background:linear-gradient(110deg,#351a1d,#211217); color:#f0b8af; }
+    .set-actions button.delete-set:hover { border-color:#cc7770; background:linear-gradient(110deg,#472024,#2b1519); }
     .set-editor { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; padding: 14px; border: 1px solid #344251; background: #0a1016; }
     .set-editor[hidden] { display: none; }
     .edit-field { display: grid; gap: 6px; color: #aebbc7; font-size: 11px; font-weight: 700; }
@@ -408,6 +410,18 @@
           }
         });
 
+        const boutonSupprimer = document.createElement("button");
+        boutonSupprimer.type = "button";
+        boutonSupprimer.className = "delete-set";
+        boutonSupprimer.textContent = "Supprimer ce build";
+        boutonSupprimer.addEventListener("click", function () {
+          const nomSet = set.nom || "ce build";
+          if (!confirm("Supprimer « " + nomSet + " » des builds enregistrés sur cet appareil ? Une copie déjà présente dans « Mes builds partagés » devra être supprimée séparément.")) return;
+          sets.splice(indexSet, 1);
+          localStorage.setItem("setsArmures", JSON.stringify(sets));
+          afficherSets();
+        });
+
         const boutonModifier = document.createElement("button");
         boutonModifier.textContent = "Modifier l’équipement";
         const editeur = document.createElement("section");
@@ -421,7 +435,7 @@
 
         const actions = document.createElement("div");
         actions.className = "set-actions";
-        actions.append(bouton, boutonModifier);
+        actions.append(bouton, boutonModifier, boutonSupprimer);
         bloc.append(actions, editeur);
         zoneSets.appendChild(bloc);
       });
