@@ -73,3 +73,12 @@ body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.11;ba
 .guide-custom-map{margin:12px 0 5px;padding:6px;border:1px dashed #8bd8dc70;background:#080d12}
 .guide-custom-map img{display:block;width:100%;max-height:65vh;object-fit:contain}
 @media(max-width:620px){.guide-editor{padding:12px}.guide-editor-heading{align-items:flex-start;flex-direction:column;gap:4px}.guide-editor-actions button{flex:1 1 45%}.guide-editor-map-label{max-width:none}}
+
+/* Galerie d’images personnalisées des guides */
+.guide-custom-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin:10px 0 4px}
+.guide-custom-map{min-width:0;margin:0;padding:6px;border:1px dashed #8bd8dc70;background:#080d12}
+.guide-custom-map img{display:block;width:100%;max-height:65vh;aspect-ratio:16/9;object-fit:contain}
+.guide-custom-map-caption{padding:6px 3px 1px;color:#9eabb8;font-size:9px;line-height:1.45}
+.page .guide-editor-map-label textarea{width:100%;min-height:94px;resize:vertical;padding:9px 11px;border:1px solid #344353;border-radius:3px;background:#0c1219;color:var(--white);font:12px/1.55 'DM Sans',sans-serif;accent-color:var(--gold)}
+.page .guide-editor-map-label textarea:focus{outline:1px solid var(--gold);border-color:var(--gold)}
+@media(max-width:520px){.guide-custom-gallery{grid-template-columns:1fr}}

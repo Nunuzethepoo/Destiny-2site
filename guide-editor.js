@@ -38,7 +38,7 @@
   const heading = el("div", "guide-editor-heading");
   heading.append(el("span", "guide-editor-kicker", "Personnalisation locale"), el("h2", "", "Adapter ce guide"));
   panel.appendChild(heading);
-  panel.appendChild(el("p", "guide-editor-note", "Active le mode édition, puis clique sur les textes encadrés pour les modifier. Les changements sont enregistrés sur cet appareil et ne changent pas la version vue par les autres visiteurs."));
+  panel.appendChild(el("p", "guide-editor-note", "Active le mode édition, puis clique sur les textes encadrés pour les modifier. Tu peux aussi ajouter jusqu’à six images en collant une URL publique par ligne. Les changements restent enregistrés sur cet appareil."));
   const actions = el("div", "guide-editor-actions");
   const toggleButton = el("button", "guide-editor-toggle", "Activer le mode édition");
   toggleButton.type = "button";
@@ -56,11 +56,11 @@
   importFile.hidden = true;
   actions.append(toggleButton, saveButton, resetButton, exportButton, importButton, importFile);
   panel.appendChild(actions);
-  const mapLabel = el("label", "guide-editor-map-label", "Image personnalisée de la salle (URL publique)");
-  const mapInput = document.createElement("input");
-  mapInput.type = "url";
-  mapInput.placeholder = "https://exemple.com/ma-capture.png";
-  mapInput.autocomplete = "off";
+  const mapLabel = el("label", "guide-editor-map-label", "Images personnalisées de la salle (une URL par ligne, six maximum)");
+  const mapInput = document.createElement("textarea");
+  mapInput.rows = 4;
+  mapInput.placeholder = "https://exemple.com/capture-1.png\nhttps://exemple.com/capture-2.png";
+  mapInput.spellcheck = false;
   mapInput.setAttribute("aria-describedby", "guide-editor-status");
   mapLabel.appendChild(mapInput);
   panel.appendChild(mapLabel);
@@ -131,8 +131,9 @@
       document.querySelectorAll("#routeContent li").forEach((node, i) => bind(node, "route_" + i, "meta"));
     }
     const rec = record("main", false);
-    mapInput.value = rec && typeof rec.mapUrl === "string" ? rec.mapUrl : "";
-    applyMap(mapInput.value);
+    const urls = storedMapUrls(rec);
+    mapInput.value = urls.join("\n");
+    applyMaps(urls);
   }
   function validImageUrl(value) {
     try {
@@ -142,33 +143,54 @@
       return false;
     }
   }
-  function applyMap(value) {
-    const custom = mapCard.querySelector("[data-guide-custom-map]");
-    let img = mapCard.querySelector(".room-photo, .real-map-figure img, figure img");
-    if (value && validImageUrl(value)) {
-      if (!img) {
-        const figure = el("figure", "guide-custom-map");
-        const link = el("a", "");
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        img = document.createElement("img");
-        img.alt = "Image de salle ajoutée par l’utilisateur";
-        img.loading = "lazy";
-        img.decoding = "async";
-        figure.dataset.guideCustomMap = "true";
-        link.appendChild(img);
-        figure.appendChild(link);
-        mapCard.appendChild(figure);
-        img.dataset.guideCustomCreated = "true";
-      }
-      img.src = value;
-      const link = img.closest("a");
-      if (link) link.href = value;
-    } else if (custom) {
-      custom.remove();
+  function storedMapUrls(rec) {
+    const values = rec && Array.isArray(rec.mapUrls) ? rec.mapUrls :
+      (rec && typeof rec.mapUrl === "string" && rec.mapUrl ? [rec.mapUrl] : []);
+    return values.filter(function (url) { return typeof url === "string" && validImageUrl(url); }).slice(0, 6);
+  }
+  function parseMapInput() {
+    const urls = String(mapInput.value || "").split(/\r?\n/).map(function (url) { return url.trim(); }).filter(Boolean);
+    if (urls.length > 6) return { error: "Tu peux ajouter jusqu’à six images par rencontre." };
+    if (urls.some(function (url) { return !validImageUrl(url); })) return { error: "Chaque ligne doit contenir une adresse d’image valide en http:// ou https://." };
+    return { urls: urls };
+  }
+  function applyMaps(values) {
+    const urls = (Array.isArray(values) ? values : []).filter(validImageUrl).slice(0, 6);
+    let gallery = mapCard.querySelector("[data-guide-custom-gallery]");
+    const existing = gallery ? Array.from(gallery.querySelectorAll("img")).map(function (img) { return img.getAttribute("src"); }) : [];
+    if (!urls.length) {
+      if (gallery) gallery.remove();
+      return;
     }
+    if (gallery && urls.length === existing.length && urls.every(function (url, i) { return url === existing[i]; })) return;
+    if (!gallery) {
+      gallery = el("div", "guide-custom-gallery");
+      gallery.dataset.guideCustomGallery = "true";
+      mapCard.appendChild(gallery);
+    }
+    const figures = urls.map(function (url, index) {
+      const figure = el("figure", "guide-custom-map");
+      const link = el("a", "");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = "Image personnalisée " + (index + 1) + " de la salle";
+      img.loading = "lazy";
+      img.decoding = "async";
+      link.appendChild(img);
+      figure.append(link, el("figcaption", "guide-custom-map-caption", "Image personnalisée " + (index + 1) + " · ouvrir en grand"));
+      return figure;
+    });
+    gallery.replaceChildren.apply(gallery, figures);
   }
   function collectFields() {
+    const parsedMap = parseMapInput();
+    if (parsedMap.error) {
+      status.textContent = parsedMap.error;
+      return;
+    }
     [encounterCard, document.getElementById("dungeonSummary"), document.getElementById("routeContent")]
       .filter(Boolean)
       .forEach((root) => {
@@ -179,8 +201,10 @@
         });
       });
     const rec = record("main", true);
-    rec.mapUrl = mapInput.value.trim();
+    rec.mapUrls = parsedMap.urls;
+    delete rec.mapUrl;
     persist();
+    applyMaps(parsedMap.urls);
   }
   function onInput(event) {
     const node = event.target.closest("[data-guide-field]");
@@ -250,15 +274,16 @@
     }
   });
   mapInput.addEventListener("change", () => {
-    const value = mapInput.value.trim();
-    if (value && !validImageUrl(value)) {
-      status.textContent = "Entre une adresse d’image valide commençant par http:// ou https://.";
+    const parsedMap = parseMapInput();
+    if (parsedMap.error) {
+      status.textContent = parsedMap.error;
       return;
     }
     const rec = record("main", true);
-    rec.mapUrl = value;
+    rec.mapUrls = parsedMap.urls;
+    delete rec.mapUrl;
     persist();
-    applyMap(value);
+    applyMaps(parsedMap.urls);
   });
   [raidSelect, dungeonSelect, encounterSelect].filter(Boolean).forEach((select) => select.addEventListener("change", () => {
     mapFields();
