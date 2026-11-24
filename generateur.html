@@ -2,8 +2,11 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Générateur de build</title>
-  <link rel="stylesheet" href="vigie.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090d12">
+  <meta name="description" content="Compose un build Destiny 2 avec tes armures, armes, doctrine et statistiques.">
+  <title>Générateur de build — VIGIE</title>
+  <link rel="stylesheet" href="vigie.css?v=builder-ui-20261124-1">
   <style>
     .builder-hero{position:relative;overflow:hidden;margin:0 0 18px;padding:clamp(19px,3vw,30px);border:1px solid #384655;border-top:2px solid #c99f5b;background:radial-gradient(ellipse at 90% 0,#c99f5b13,transparent 42%),linear-gradient(135deg,#18232e,#0d1319 70%);box-shadow:0 14px 35px #0003}
     .builder-eyebrow{display:block;margin-bottom:7px;color:var(--gold);font-size:9px;font-weight:800;letter-spacing:.17em;text-transform:uppercase}
@@ -78,6 +81,69 @@
     .page-links a:hover{border-color:#c99f5b88;color:var(--gold)}
     @media(max-width:920px){.builder-grid{grid-template-columns:1fr}.builder-card{padding:17px}}
     @media(max-width:520px){.stats-table th:first-child{width:31%}.stats-table th:nth-child(2){width:41%}.stats-table th:nth-child(3){width:28%}.stats-table th{padding:0 5px 5px;font-size:8px}.stats-table td{padding:8px 6px}.stats-table td:first-child{font-size:10px}.stat-minimum{padding:6px 4px}.builder-tools{align-items:flex-start;flex-direction:column}}
+    .builder-hero{min-height:190px;display:flex;flex-direction:column;justify-content:center;padding:clamp(24px,4vw,42px);border-top:3px solid var(--gold);background:radial-gradient(circle at 82% 48%,#7ac6db20 0 2%,transparent 22%),radial-gradient(circle at 88% 48%,#e5bd6b15 0 12%,transparent 38%),linear-gradient(115deg,#111a23,#0a1016 68%,#161b20)}
+    .builder-hero:after{content:"";position:absolute;right:6%;top:50%;width:128px;height:128px;border:1px solid #e6bb7240;transform:translateY(-50%) rotate(45deg);box-shadow:0 0 0 12px #e6bb7206,0 0 0 28px #8bd8dc05;pointer-events:none}
+    .builder-hero h1,.builder-hero .builder-intro,.builder-hero-tags,.builder-eyebrow{position:relative;z-index:1}
+    .builder-hero h1{font-size:clamp(34px,5vw,54px);letter-spacing:.06em}
+    .builder-hero-tags span{border-radius:2px;background:#080d12b8}
+    .builder-grid{grid-template-columns:minmax(0,1.08fr) minmax(360px,.92fr);gap:14px}
+    .builder-card{position:relative;padding:clamp(16px,2vw,22px);border-radius:3px;background:linear-gradient(155deg,#151e27,#0b1118 78%);box-shadow:0 20px 50px #0003}
+    .builder-card:before{content:"";position:absolute;top:-2px;left:20px;width:64px;height:2px;background:var(--gold);opacity:.72}
+    .card-heading{align-items:center;padding-bottom:14px;border-bottom:1px solid #ffffff12}
+    .card-step{flex-basis:36px;height:36px;background:linear-gradient(145deg,#e6bb7220,#e6bb7205);font-size:12px}
+    .builder-fields{gap:11px}
+    .builder-control>span{font-size:9px;letter-spacing:.1em}
+    .builder-control select,.stat-minimum{border-radius:2px;background:linear-gradient(180deg,#111922,#090e14);box-shadow:inset 0 1px #ffffff07}
+    .builder-subsection{position:relative;gap:12px;padding:15px;border-color:#33414e;border-radius:3px;background:linear-gradient(145deg,#101821,#0a1016)}
+    .builder-subsection h3{display:flex;align-items:center;gap:8px;font-size:17px}
+    .builder-subsection h3:before{content:"";width:3px;height:15px;background:var(--gold);box-shadow:0 0 10px #e6bb7266}
+    .builder-subsection .context-panel{margin:0}
+    .weapon-grid{gap:8px}
+    .weapon-grid .builder-control{min-width:0}
+    .bonus-info{border-radius:2px}
+    .ability-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .ability-title{padding:8px 10px;border-left:2px solid var(--cyan);background:#8bd8dc08}
+    .ability-preview{align-items:stretch}
+    .ability-chip{min-height:36px;padding:4px 8px;border-color:#33424d;background:#111a22}
+    .ability-chip img{width:28px;height:28px;border-radius:2px}
+    .subclass-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:7px}
+    .subclass-choice{position:relative;display:grid;grid-template-columns:42px minmax(0,1fr);align-items:center;gap:9px;min-width:0;min-height:62px;padding:7px;border:1px solid #34424f;border-radius:2px;background:linear-gradient(140deg,#121b24,#090f15);color:#eaf0f3;text-align:left;cursor:pointer;transition:border-color .15s,background .15s,transform .15s}
+    .subclass-choice:hover{border-color:#8bd8dc99;transform:translateY(-1px)}
+    .subclass-choice[aria-pressed="true"]{border-color:#e6bb72;background:linear-gradient(135deg,#e6bb721c,#8bd8dc08);box-shadow:inset 0 0 0 1px #e6bb7221,0 5px 16px #0003}
+    .subclass-icon-frame,.ability-picker-icon{position:relative;display:grid;place-items:center;flex:0 0 auto;width:42px;height:42px;overflow:hidden;border:1px solid #ffffff25;border-radius:2px;background:radial-gradient(circle,#263744,#0a1016 72%);color:#e6c57d;font-size:19px}
+    .subclass-icon-frame img,.ability-picker-icon img{display:block;width:100%;height:100%;object-fit:cover}
+    .subclass-choice-copy{display:grid;gap:3px;min-width:0}
+    .subclass-choice-copy strong{overflow:hidden;color:#f1f4f6;font:700 15px/1.05 'Barlow Condensed',sans-serif;text-overflow:ellipsis;white-space:nowrap}
+    .subclass-choice-copy small{color:#8494a1;font-size:8px;letter-spacing:.08em;text-transform:uppercase}
+    .builder-native-select{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+    .ability-picker{position:relative;min-width:0}
+    .ability-picker-trigger{display:grid;grid-template-columns:38px minmax(0,1fr) 16px;align-items:center;gap:9px;width:100%;min-height:54px;padding:6px 9px;border:1px solid #34424f;border-radius:2px;background:linear-gradient(135deg,#131d27,#080e14);color:#edf1f4;text-align:left;cursor:pointer;transition:border-color .15s,background .15s}
+    .ability-picker-trigger:hover,.ability-picker-trigger[aria-expanded="true"]{border-color:#8bd8dcaa;background:#15212a}
+    .ability-picker-trigger .ability-picker-icon{width:38px;height:38px}
+    .ability-picker-name{display:-webkit-box;overflow:hidden;color:#e8edf0;font-size:10px;font-weight:700;line-height:1.35;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+    .ability-picker-chevron{color:var(--gold);font-size:12px;text-align:center}
+    .ability-picker-list{position:absolute;z-index:30;top:calc(100% + 5px);left:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:5px;width:min(610px,calc(100vw - 56px));max-height:min(360px,60vh);padding:8px;overflow:auto;border:1px solid #586878;border-radius:3px;background:#0b1118;box-shadow:0 18px 42px #000b}
+    .ability-picker-option{display:grid;grid-template-columns:40px minmax(0,1fr);align-items:center;gap:8px;min-width:0;min-height:54px;padding:6px;border:1px solid #263541;border-radius:2px;background:#101922;color:#dce3e8;text-align:left;cursor:pointer;transition:border-color .15s,background .15s}
+    .ability-picker-option:hover{border-color:#8bd8dc99;background:#14232c}
+    .ability-picker-option[aria-selected="true"]{border-color:var(--gold);background:#e6bb7212}
+    .ability-picker-option .ability-picker-icon{width:40px;height:40px}
+    .ability-picker-option span:last-child{display:-webkit-box;overflow:hidden;color:#dce3e8;font-size:9px;font-weight:700;line-height:1.35;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+    .ability-picker-list[hidden]{display:none}
+    .ability-picker-trigger:focus-visible,.ability-picker-option:focus-visible,.subclass-choice:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+    #doctrineInfo{display:flex;align-items:center;min-height:40px}
+    #tableStats{border:0;border-spacing:0 6px;background:transparent}
+    #tableStats th{padding:0 9px 2px;color:#8898a5;letter-spacing:.1em}
+    #tableStats td{border-top:1px solid #2c3944;border-bottom:1px solid #2c3944;background:linear-gradient(100deg,#111922,#0b1118)}
+    #tableStats td:first-child{border-left:1px solid #2c3944;background:linear-gradient(120deg,#18232d,#10171f)}
+    #tableStats td:last-child{border-right:1px solid #2c3944}
+    #tableStats input[type="range"]{accent-color:var(--gold)}
+    #chercher{min-height:50px;letter-spacing:.12em}
+    .resultat{position:relative;overflow:hidden;border-radius:3px}
+    .resultat:before{content:"";position:absolute;inset:0 0 auto;height:2px;background:linear-gradient(90deg,var(--gold),transparent 72%)}
+    @media(max-width:1080px){.builder-grid{grid-template-columns:minmax(0,1fr) minmax(330px,.86fr)}}
+    @media(max-width:920px){.builder-grid{grid-template-columns:1fr}.builder-card{padding:17px}}
+    @media(max-width:620px){.builder-hero{min-height:165px}.builder-hero:after{right:-5px;width:90px;height:90px;opacity:.6}.builder-hero h1{max-width:82%;font-size:37px}.builder-grid{gap:10px}.builder-subsection{padding:12px}.subclass-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ability-grid{grid-template-columns:1fr}.ability-picker-list{width:min(560px,calc(100vw - 48px));grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:380px){.subclass-grid{grid-template-columns:1fr}.ability-picker-list{grid-template-columns:1fr}}
   </style>
   <script src="vigie-shell.js" defer></script>
 </head>
@@ -113,7 +179,8 @@
         <p id="bonusInfo" class="bonus-info" aria-live="polite">Les bonus disponibles apparaîtront selon l’armure de ton inventaire. Les bonus demandent généralement 2 ou 4 pièces du même set.</p>
         <div class="builder-subsection">
           <h3>Doctrine / sous-classe</h3>
-          <label class="builder-control" for="choixDoctrine"><span>Doctrine prévue</span><select id="choixDoctrine"></select></label>
+          <label class="builder-control" for="choixDoctrine"><span>Choisis ta doctrine</span><select id="choixDoctrine" class="builder-native-select" aria-label="Doctrine prévue"></select></label>
+          <div id="doctrinePicker" class="subclass-grid" role="group" aria-label="Choix de la doctrine"></div>
           <p id="doctrineInfo" class="context-panel" aria-live="polite">Lecture de la doctrine du Gardien…</p>
           <div id="doctrineAptitudes" class="ability-grid" aria-live="polite"><p class="ability-title">Sélectionne une doctrine pour charger ses grenades, capacités, aspects et fragments.</p></div>
         </div>
@@ -157,6 +224,7 @@
     const choixClasse = document.getElementById("choixClasse");
     const choixPersonnage = document.getElementById("choixPersonnage");
     const choixDoctrine = document.getElementById("choixDoctrine");
+    const doctrinePicker = document.getElementById("doctrinePicker");
     const choixExotique = document.getElementById("choixExotique");
     const choixBonus = document.getElementById("choixBonus");
     const bonusInfo = document.getElementById("bonusInfo");
@@ -826,6 +894,7 @@
         indisponible.value = "";
         indisponible.textContent = "Aucune doctrine trouvée";
         choixDoctrine.appendChild(indisponible);
+        afficherSelecteurDoctrine();
         return;
       }
       for (const entree of options) {
@@ -837,6 +906,7 @@
       const souhaite = Number(plansDoctrine[idPersonnage]) || hashActuel || options[0].hash;
       choixDoctrine.value = options.some(function (entree) { return entree.hash === souhaite; }) ? String(souhaite) : String(options[0].hash);
       plansDoctrine[idPersonnage] = Number(choixDoctrine.value);
+      afficherSelecteurDoctrine();
     }
 
     function typeAptitude(nom) {
@@ -852,6 +922,153 @@
     function nomAptitude(type) {
       return { aspect: "Aspect", fragment: "Fragment", grenade: "Grenade", melee: "Corps à corps", classAbility: "Capacité de classe" }[type] || "Aptitude";
     }
+
+
+    function urlIconeDefinition(definition) {
+      const path = definition && definition.displayProperties && definition.displayProperties.icon || "";
+      return /^\/common\/destiny2_content\/[A-Za-z0-9_./-]+$/.test(path) && !path.includes("..") ? "https://www.bungie.net" + path : "";
+    }
+
+    function cadreIconeDefinition(definition, type, classe) {
+      const cadre = document.createElement("span");
+      cadre.className = classe || "ability-picker-icon";
+      const path = urlIconeDefinition(definition);
+      if (path) {
+        const image = document.createElement("img");
+        image.src = path;
+        image.alt = "";
+        image.loading = "lazy";
+        image.decoding = "async";
+        image.referrerPolicy = "no-referrer";
+        cadre.appendChild(image);
+      } else {
+        cadre.textContent = { aspect: "◈", fragment: "✦", grenade: "◉", melee: "✹", classAbility: "✣" }[type] || "◇";
+      }
+      return cadre;
+    }
+
+    function afficherSelecteurDoctrine() {
+      if (!doctrinePicker) return;
+      doctrinePicker.replaceChildren();
+      Array.from(choixDoctrine.options).forEach(function (option) {
+        const hash = Number(option.value);
+        const definition = definitionsLite[hash];
+        const nom = definition && definition.displayProperties && definition.displayProperties.name || option.textContent;
+        if (!hash || !nom) return;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "subclass-choice";
+        button.setAttribute("aria-pressed", String(Number(choixDoctrine.value) === hash));
+        button.setAttribute("aria-label", "Choisir la doctrine " + nom);
+        button.appendChild(cadreIconeDefinition(definition, "aspect", "subclass-icon-frame"));
+        const copy = document.createElement("span");
+        copy.className = "subclass-choice-copy";
+        const title = document.createElement("strong");
+        title.textContent = nom;
+        const kind = document.createElement("small");
+        kind.textContent = CLASSES[Number(choixClasse.value)] || "Sous-classe";
+        copy.append(title, kind);
+        button.appendChild(copy);
+        button.addEventListener("click", function () {
+          choixDoctrine.value = String(hash);
+          choixDoctrine.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        doctrinePicker.appendChild(button);
+      });
+    }
+
+    function creerSelecteurAptitude(select, type) {
+      const picker = document.createElement("div");
+      picker.className = "ability-picker";
+      picker.setAttribute("role", "group");
+      picker.setAttribute("aria-label", "Choisir " + nomAptitude(type).toLocaleLowerCase("fr"));
+      const trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.className = "ability-picker-trigger";
+      trigger.setAttribute("aria-haspopup", "listbox");
+      trigger.setAttribute("aria-expanded", "false");
+      const list = document.createElement("div");
+      list.className = "ability-picker-list";
+      list.setAttribute("role", "listbox");
+      list.setAttribute("aria-label", nomAptitude(type));
+      list.hidden = true;
+      Array.from(select.options).forEach(function (option) {
+        const hash = Number(option.value);
+        const definition = definitionsLite[hash] || definitionsAptitudesDoctrine[hash];
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "ability-picker-option";
+        button.setAttribute("role", "option");
+        button.dataset.value = option.value;
+        button.setAttribute("aria-selected", String(select.value === option.value));
+        const description = definition && definition.displayProperties && definition.displayProperties.description || "";
+        button.title = description ? option.textContent + " — " + description : option.textContent;
+        button.appendChild(cadreIconeDefinition(definition, type));
+        const name = document.createElement("span");
+        name.textContent = option.textContent;
+        button.appendChild(name);
+        button.addEventListener("click", function () {
+          select.value = option.value;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+          list.hidden = true;
+          trigger.setAttribute("aria-expanded", "false");
+          trigger.focus();
+        });
+        list.appendChild(button);
+      });
+      function actualiser() {
+        const option = select.options[select.selectedIndex];
+        const hash = Number(option && option.value) || 0;
+        const definition = definitionsLite[hash] || definitionsAptitudesDoctrine[hash];
+        trigger.replaceChildren();
+        trigger.appendChild(cadreIconeDefinition(definition, type));
+        const name = document.createElement("span");
+        name.className = "ability-picker-name";
+        name.textContent = option ? option.textContent : "Choisir";
+        const chevron = document.createElement("span");
+        chevron.className = "ability-picker-chevron";
+        chevron.textContent = "⌄";
+        trigger.append(name, chevron);
+        trigger.setAttribute("aria-label", nomAptitude(type) + " : " + name.textContent + ". Ouvrir la sélection.");
+        Array.from(list.querySelectorAll("[role=option]")).forEach(function (button) {
+          button.setAttribute("aria-selected", String(button.dataset.value === select.value));
+        });
+      }
+      trigger.addEventListener("click", function () {
+        const ouvrir = list.hidden;
+        document.querySelectorAll(".ability-picker-list:not([hidden])").forEach(function (otherList) {
+          if (otherList === list) return;
+          otherList.hidden = true;
+          const otherTrigger = otherList.parentElement && otherList.parentElement.querySelector(".ability-picker-trigger");
+          if (otherTrigger) otherTrigger.setAttribute("aria-expanded", "false");
+        });
+        list.hidden = !ouvrir;
+        trigger.setAttribute("aria-expanded", String(ouvrir));
+      });
+      select.classList.add("builder-native-select");
+      select.setAttribute("aria-hidden", "true");
+      select.tabIndex = -1;
+      select.addEventListener("change", actualiser);
+      picker.append(trigger, list);
+      picker.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && !list.hidden) {
+          list.hidden = true;
+          trigger.setAttribute("aria-expanded", "false");
+          trigger.focus();
+        }
+      });
+      actualiser();
+      return picker;
+    }
+
+    document.addEventListener("click", function (event) {
+      if (event.target.closest && event.target.closest(".ability-picker")) return;
+      document.querySelectorAll(".ability-picker-list:not([hidden])").forEach(function (list) {
+        list.hidden = true;
+        const trigger = list.parentElement && list.parentElement.querySelector(".ability-picker-trigger");
+        if (trigger) trigger.setAttribute("aria-expanded", "false");
+      });
+    });
 
     function clePlanAptitude(idPersonnage, hashDoctrine) {
       return idPersonnage + ":" + hashDoctrine;
@@ -1073,12 +1290,13 @@
           const numeroGroupe = entrees.slice(0, index + 1).filter(function (_socket, socketIndex) {
             return groupeIndex[socketIndex] && groupeIndex[socketIndex].type === groupe.type;
           }).length;
-          const champ = document.createElement("label");
+          const champ = document.createElement("div");
           champ.className = "builder-control";
           const etiquette = document.createElement("span");
           etiquette.textContent = nomAptitude(groupe.type) + (numeroGroupe > 1 || entrees.filter(function (_socket, socketIndex) { return groupeIndex[socketIndex] && groupeIndex[socketIndex].type === groupe.type; }).length > 1 ? " " + numeroGroupe : "");
           const select = document.createElement("select");
           select.dataset.socketIndex = String(index);
+          select.setAttribute("aria-label", etiquette.textContent);
           for (const hash of hashes) {
             const plug = definitionsLite[hash] || definitionsAptitudesDoctrine[hash];
             const option = document.createElement("option");
@@ -1093,7 +1311,8 @@
             plan[key].socketIndex = index;
             plan[key].plugItemHash = Number(select.value);
           });
-          champ.append(etiquette, select);
+          const picker = creerSelecteurAptitude(select, groupe.type);
+          champ.append(etiquette, picker, select);
           zone.appendChild(champ);
           nombre++;
         }
@@ -1241,6 +1460,7 @@
     choixPersonnage.addEventListener("change", function () { remplirDoctrine(); afficherArmes(); afficherDoctrine(); chargerAptitudesDoctrine(); });
     choixDoctrine.addEventListener("change", function () {
       plansDoctrine[choixPersonnage.value] = Number(choixDoctrine.value) || 0;
+      afficherSelecteurDoctrine();
       afficherDoctrine();
       chargerAptitudesDoctrine();
     });
