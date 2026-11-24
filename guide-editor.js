@@ -35,17 +35,20 @@
     }
   }
   let data = readData();
+  let publishedData = normalizeData({});
   let editing = false;
   let mutating = false;
   let sharedLoaded = false;
   const completedUploads = new Map();
+  const managedImageUrls = new Set();
+  const pendingDeleteUrls = new Set();
 
   const panel = el("section", "guide-editor");
   panel.setAttribute("aria-labelledby", "guide-editor-title");
   const heading = el("div", "guide-editor-heading");
   heading.append(el("span", "guide-editor-kicker", "Guide partagé"), el("h2", "", "Adapter ce guide"));
   panel.appendChild(heading);
-  panel.appendChild(el("p", "guide-editor-note", "Active le mode édition puis modifie les textes ou les images. Clique sur « Publier pour tout le monde » pour enregistrer les changements dans le guide commun. La publication est réservée au compte Bungie propriétaire ; les visiteurs peuvent consulter la version partagée."));
+  panel.appendChild(el("p", "guide-editor-note", "Active le mode édition puis modifie les textes ou les images. Sur chaque image, choisis « Retirer du guide », puis publie pour appliquer le changement à tout le monde. Une image importée est supprimée du stockage lorsqu’elle n’est plus utilisée. La publication est réservée au compte Bungie propriétaire."));
   const actions = el("div", "guide-editor-actions");
   const toggleButton = el("button", "guide-editor-toggle", "Activer le mode édition");
   toggleButton.type = "button";
@@ -119,6 +122,44 @@
   }
   function guideImageUploadEndpoint() {
     return guideEndpoint().replace(/\/guides$/, "/guides/images");
+  }
+  function cloneData(value) {
+    return normalizeData(JSON.parse(JSON.stringify(value || {})));
+  }
+  function ownedGuideImageUrls(value) {
+    const urls = new Set();
+    let workerOrigin;
+    try { workerOrigin = new URL(guideEndpoint()).origin; } catch (_) { return urls; }
+    ["raids", "dungeons", "dungeonMeta"].forEach(function (bucketName) {
+      const bucket = value && value[bucketName];
+      if (!bucket || typeof bucket !== "object") return;
+      Object.values(bucket).forEach(function (rec) {
+        const values = rec && Array.isArray(rec.mapUrls) ? rec.mapUrls :
+          (rec && typeof rec.mapUrl === "string" ? [rec.mapUrl] : []);
+        values.forEach(function (rawUrl) {
+          try {
+            const url = new URL(rawUrl);
+            if (url.origin === workerOrigin && /^\/guides\/images\/[0-9a-f-]{36}\.(png|jpg|webp|gif)$/i.test(url.pathname)) {
+              urls.add(url.toString());
+            }
+          } catch (_) {}
+        });
+      });
+    });
+    return urls;
+  }
+  async function removeGuideImageFromStorage(imageUrl, token) {
+    const endpoint = new URL(guideEndpoint());
+    const url = new URL(imageUrl);
+    if (url.origin !== endpoint.origin || !/^\/guides\/images\/[0-9a-f-]{36}\.(png|jpg|webp|gif)$/i.test(url.pathname)) return;
+    const response = await fetch(url.toString(), {
+      method: "DELETE",
+      headers: { "Authorization": "Bearer " + token }
+    });
+    let result = {};
+    try { result = await response.json(); } catch (_) {}
+    if (response.status === 404) return;
+    if (!response.ok) throw new Error(result.error || "Impossible de supprimer une image inutilisée.");
   }
   const fileTypes = {
     "image/png": "PNG",
@@ -198,6 +239,7 @@
           if (!response.ok || !result.url) throw new Error(result.error || "Impossible d’importer l’image.");
           imageUrl = result.url;
           completedUploads.set(fingerprint, imageUrl);
+          managedImageUrls.add(imageUrl);
         }
         urls.push(imageUrl);
       }
@@ -233,6 +275,12 @@
     saveButton.disabled = true;
     imageFileInput.disabled = true;
     try {
+      const deleteCandidates = new Set([
+        ...ownedGuideImageUrls(publishedData),
+        ...managedImageUrls,
+        ...pendingDeleteUrls
+      ]);
+      const imageUrlsAfterPublish = ownedGuideImageUrls(data);
       const response = await fetch(guideEndpoint(), {
         method: "PUT",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
@@ -242,7 +290,25 @@
       try { result = await response.json(); } catch (_) {}
       if (!response.ok) throw new Error(result.error || "La publication du guide a échoué.");
       persist();
-      status.textContent = "Publié pour tout le monde. Les visiteurs verront cette version du guide.";
+      publishedData = cloneData(data);
+      let deletionFailed = false;
+      for (const imageUrl of deleteCandidates) {
+        if (imageUrlsAfterPublish.has(imageUrl)) {
+          pendingDeleteUrls.delete(imageUrl);
+          continue;
+        }
+        try {
+          await removeGuideImageFromStorage(imageUrl, token);
+          pendingDeleteUrls.delete(imageUrl);
+        } catch (_) {
+          pendingDeleteUrls.add(imageUrl);
+          deletionFailed = true;
+        }
+      }
+      managedImageUrls.clear();
+      status.textContent = deletionFailed
+        ? "Guide publié, mais certaines images retirées n’ont pas pu être supprimées du stockage. Clique de nouveau sur « Publier » pour réessayer."
+        : "Publié pour tout le monde. Les images retirées et inutilisées ont été supprimées.";
       return true;
     } catch (error) {
       status.textContent = error.message || "Impossible de publier le guide. Vérifie ta connexion Internet.";
@@ -265,6 +331,7 @@
       try { result = await response.json(); } catch (_) {}
       if (!response.ok || !result.edits) throw new Error(result.error || "Le guide partagé est momentanément indisponible.");
       const shared = normalizeData(result.edits);
+      publishedData = cloneData(shared);
       const localDraft = readData();
       if (hasGuideEdits(shared)) {
         data = shared;
@@ -355,11 +422,12 @@
     const urls = (Array.isArray(values) ? values : []).filter(validImageUrl).slice(0, 6);
     let gallery = mapCard.querySelector("[data-guide-custom-gallery]");
     const existing = gallery ? Array.from(gallery.querySelectorAll("img")).map(function (img) { return img.getAttribute("src"); }) : [];
+    const controlsMatch = editing === Boolean(gallery && gallery.querySelector("[data-guide-remove-image]"));
     if (!urls.length) {
       if (gallery) gallery.remove();
       return;
     }
-    if (gallery && urls.length === existing.length && urls.every(function (url, i) { return url === existing[i]; })) return;
+    if (gallery && controlsMatch && urls.length === existing.length && urls.every(function (url, i) { return url === existing[i]; })) return;
     if (!gallery) {
       gallery = el("div", "guide-custom-gallery");
       gallery.dataset.guideCustomGallery = "true";
@@ -378,6 +446,13 @@
       img.decoding = "async";
       link.appendChild(img);
       figure.append(link, el("figcaption", "guide-custom-map-caption", "Image personnalisée " + (index + 1) + " · ouvrir en grand"));
+      if (editing) {
+        const removeButton = el("button", "guide-custom-map-remove", "Retirer du guide");
+        removeButton.type = "button";
+        removeButton.dataset.guideRemoveImage = url;
+        removeButton.setAttribute("aria-label", "Retirer l’image personnalisée " + (index + 1) + " du guide");
+        figure.appendChild(removeButton);
+      }
       return figure;
     });
     gallery.replaceChildren.apply(gallery, figures);
@@ -522,6 +597,26 @@
     }
   });
   mapCard.addEventListener("click", (event) => {
+    const removeButton = event.target.closest("[data-guide-remove-image]");
+    if (removeButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!editing) return;
+      const imageUrl = removeButton.dataset.guideRemoveImage;
+      const parsedMap = parseMapInput();
+      if (parsedMap.error) {
+        status.textContent = parsedMap.error;
+        return;
+      }
+      const urls = parsedMap.urls.filter(function (url) { return url !== imageUrl; });
+      mapInput.value = urls.join("\n");
+      const rec = record("main", true);
+      rec.mapUrls = urls;
+      delete rec.mapUrl;
+      persist("Image retirée du brouillon. Clique sur « Publier pour tout le monde » pour la retirer du guide commun.");
+      applyMaps(urls);
+      return;
+    }
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     const link = event.target.closest("a");
     const sourceImage = link && link.querySelector("img");
