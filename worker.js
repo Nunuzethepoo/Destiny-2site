@@ -237,7 +237,10 @@ export default {
         "access-control-max-age": "86400", "vary": "Origin"
       }});
     }
-    if (url.pathname === "/guides") return handleSharedGuides(request, env, siteOrigin);
+    if (url.pathname === "/guides") {
+      try { return await handleSharedGuides(request, env, siteOrigin); }
+      catch (_) { return fail("Erreur lors de la lecture ou de la publication du guide partagé", 502, siteOrigin); }
+    }
     if (!env.BUNGIE_API_KEY || !env.BUNGIE_CLIENT_ID) return fail("Secrets Bungie non configurés", 503, siteOrigin);
 
     try {
