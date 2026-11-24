@@ -48,7 +48,7 @@
   const heading = el("div", "guide-editor-heading");
   heading.append(el("span", "guide-editor-kicker", "Guide partagé"), el("h2", "", "Adapter ce guide"));
   panel.appendChild(heading);
-  panel.appendChild(el("p", "guide-editor-note", "Active le mode édition puis modifie les textes ou les images. Sur chaque image, choisis « Retirer du guide », puis publie pour appliquer le changement à tout le monde. Une image importée est supprimée du stockage lorsqu’elle n’est plus utilisée. La publication est réservée au compte Bungie propriétaire."));
+  panel.appendChild(el("p", "guide-editor-note", "Active le mode édition pour retirer ou réafficher les images intégrées et personnalisées. Publie ensuite pour appliquer le changement à tout le monde. La publication est réservée au compte Bungie propriétaire."));
   const actions = el("div", "guide-editor-actions");
   const toggleButton = el("button", "guide-editor-toggle", "Activer le mode édition");
   toggleButton.type = "button";
@@ -100,7 +100,7 @@
     const ids = selection();
     const bucket = page === "raids" ? data.raids : (scope === "meta" ? data.dungeonMeta : data.dungeons);
     const id = scope === "meta" ? ids.meta : ids.main;
-    if (!bucket[id] && create) bucket[id] = { fields: {}, mapUrl: "" };
+    if (!bucket[id] && create) bucket[id] = { fields: {}, mapUrl: "", hiddenImages: [] };
     if (!bucket[id] || typeof bucket[id] !== "object") return null;
     if (!bucket[id].fields || typeof bucket[id].fields !== "object") bucket[id].fields = {};
     return bucket[id];
@@ -398,6 +398,50 @@
     const urls = storedMapUrls(rec);
     mapInput.value = urls.join("\n");
     applyMaps(urls);
+    syncGuideImages();
+  }
+  function canonicalGuideImageId(value) {
+    try {
+      const parsed = new URL(value);
+      return parsed.protocol === "https:" && parsed.hostname && !parsed.username && !parsed.password ? parsed.toString() : "";
+    } catch (_) {
+      return "";
+    }
+  }
+  function syncGuideImages() {
+    const rec = record("main", false);
+    const hidden = new Set((rec && Array.isArray(rec.hiddenImages) ? rec.hiddenImages : []).map(canonicalGuideImageId).filter(Boolean));
+    const images = Array.from(mapCard.querySelectorAll("img[data-guide-image-id]"));
+    const imageIds = new Set(images.map(function (img) { return canonicalGuideImageId(img.dataset.guideImageId); }).filter(Boolean));
+    Array.from(mapCard.querySelectorAll("[data-guide-image-control]")).forEach(function (button) {
+      if (!imageIds.has(canonicalGuideImageId(button.dataset.guideImageControl))) button.remove();
+    });
+    images.forEach(function (img) {
+      const imageId = canonicalGuideImageId(img.dataset.guideImageId);
+      const figure = img.closest("figure");
+      if (!imageId || !figure) return;
+      const isHidden = hidden.has(imageId);
+      if (figure.hidden !== isHidden) figure.hidden = isHidden;
+      const control = Array.from(mapCard.querySelectorAll("[data-guide-image-control]")).find(function (button) {
+        return canonicalGuideImageId(button.dataset.guideImageControl) === imageId;
+      });
+      if (!editing) {
+        if (control) control.remove();
+        return;
+      }
+      let button = control;
+      if (!button) {
+        button = el("button", "guide-image-control");
+        button.type = "button";
+        button.dataset.guideImageControl = imageId;
+        figure.insertAdjacentElement("afterend", button);
+      }
+      const action = isHidden ? "restore" : "hide";
+      const label = isHidden ? "Réafficher cette image" : "Retirer cette image";
+      if (button.dataset.guideImageAction !== action) button.dataset.guideImageAction = action;
+      if (button.textContent !== label) button.textContent = label;
+      button.setAttribute("aria-label", label + " du guide");
+    });
   }
   function validImageUrl(value) {
     try {
@@ -615,6 +659,27 @@
       delete rec.mapUrl;
       persist("Image retirée du brouillon. Clique sur « Publier pour tout le monde » pour la retirer du guide commun.");
       applyMaps(urls);
+      return;
+    }
+    const imageControl = event.target.closest("[data-guide-image-action]");
+    if (imageControl) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!editing) return;
+      const imageId = canonicalGuideImageId(imageControl.dataset.guideImageControl);
+      if (!imageId) return;
+      const rec = record("main", true);
+      const hiddenImages = (Array.isArray(rec.hiddenImages) ? rec.hiddenImages : []).map(canonicalGuideImageId).filter(Boolean);
+      const action = imageControl.dataset.guideImageAction;
+      if (action === "hide") {
+        if (!hiddenImages.includes(imageId)) hiddenImages.push(imageId);
+        rec.hiddenImages = hiddenImages.slice(0, 24);
+        persist("Image retirée du brouillon. Publie pour appliquer le changement à tout le monde.");
+      } else {
+        rec.hiddenImages = hiddenImages.filter(function (id) { return id !== imageId; });
+        persist("Image réaffichée dans le brouillon. Publie pour appliquer le changement à tout le monde.");
+      }
+      syncGuideImages();
       return;
     }
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
