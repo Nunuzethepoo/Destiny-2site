@@ -289,6 +289,49 @@
     mapFields();
     status.textContent = "Activité chargée. Les modifications sauvegardées pour cette rencontre sont appliquées.";
   }));
+  const lightbox = document.createElement("dialog");
+  lightbox.className = "guide-lightbox";
+  lightbox.setAttribute("aria-label", "Aperçu agrandi de l’image du guide");
+  const lightboxHeader = el("div", "guide-lightbox-header");
+  lightboxHeader.appendChild(el("span", "guide-lightbox-title", "Image du guide"));
+  const lightboxClose = el("button", "guide-lightbox-close", "Fermer");
+  lightboxClose.type = "button";
+  lightboxClose.addEventListener("click", () => {
+    if (typeof lightbox.close === "function") lightbox.close();
+    else lightbox.removeAttribute("open");
+  });
+  lightboxHeader.appendChild(lightboxClose);
+  const lightboxImage = document.createElement("img");
+  lightboxImage.className = "guide-lightbox-image";
+  lightboxImage.alt = "";
+  const lightboxCaption = el("p", "guide-lightbox-caption", "");
+  lightbox.append(lightboxHeader, lightboxImage, lightboxCaption);
+  document.body.appendChild(lightbox);
+  lightbox.addEventListener("click", (event) => {
+    if (event.target === lightbox) {
+      if (typeof lightbox.close === "function") lightbox.close();
+      else lightbox.removeAttribute("open");
+    }
+  });
+  mapCard.addEventListener("click", (event) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest("a");
+    const sourceImage = link && link.querySelector("img");
+    if (!sourceImage) return;
+    event.preventDefault();
+    lightboxImage.src = sourceImage.currentSrc || sourceImage.src;
+    lightboxImage.alt = sourceImage.alt || "Image agrandie du guide";
+    const figure = sourceImage.closest("figure");
+    const caption = figure && figure.querySelector("figcaption");
+    lightboxCaption.textContent = caption ? String(caption.innerText || caption.textContent || "").trim() : (sourceImage.alt || "");
+    try {
+      if (typeof lightbox.showModal === "function") lightbox.showModal();
+      else lightbox.setAttribute("open", "");
+    } catch (_) {
+      lightbox.setAttribute("open", "");
+    }
+    lightboxClose.focus();
+  });
   const observer = new MutationObserver(() => {
     if (mutating) return;
     mutating = true;
