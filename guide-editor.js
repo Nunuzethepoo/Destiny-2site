@@ -38,6 +38,7 @@
   let editing = false;
   let mutating = false;
   let sharedLoaded = false;
+  const completedUploads = new Map();
 
   const panel = el("section", "guide-editor");
   panel.setAttribute("aria-labelledby", "guide-editor-title");
@@ -70,6 +71,16 @@
   mapInput.setAttribute("aria-describedby", "guide-editor-status");
   mapLabel.appendChild(mapInput);
   panel.appendChild(mapLabel);
+  const imageFileLabel = el("label", "guide-editor-map-label", "Importer des images depuis cet appareil");
+  const imageFileInput = document.createElement("input");
+  imageFileInput.type = "file";
+  imageFileInput.accept = "image/png,image/jpeg,image/webp,image/gif";
+  imageFileInput.multiple = true;
+  imageFileInput.setAttribute("aria-describedby", "guide-editor-file-hint");
+  const imageFileHint = el("span", "guide-editor-file-hint", "PNG, JPEG, WebP ou GIF · 5 Mo maximum par image, six images maximum par rencontre. Elles seront visibles par tous après publication.");
+  imageFileHint.id = "guide-editor-file-hint";
+  imageFileLabel.append(imageFileInput, imageFileHint);
+  panel.appendChild(imageFileLabel);
   const status = el("p", "guide-editor-status", "Chargement du guide commun…");
   status.id = "guide-editor-status";
   status.setAttribute("role", "status");
@@ -106,6 +117,105 @@
     if (!api || typeof api.getWorkerUrl !== "function") throw new Error("Le relais VIGIE n’est pas disponible. Recharge la page.");
     return api.getWorkerUrl().replace(/\/$/, "") + "/guides";
   }
+  function guideImageUploadEndpoint() {
+    return guideEndpoint().replace(/\/guides$/, "/guides/images");
+  }
+  const fileTypes = {
+    "image/png": "PNG",
+    "image/jpeg": "JPEG",
+    "image/webp": "WebP",
+    "image/gif": "GIF"
+  };
+  const defaultFileHint = "PNG, JPEG, WebP ou GIF · 5 Mo maximum par image, six images maximum par rencontre. Elles seront visibles par tous après publication.";
+  imageFileInput.addEventListener("change", () => {
+    const files = Array.from(imageFileInput.files || []);
+    if (!files.length) {
+      imageFileHint.textContent = defaultFileHint;
+      return;
+    }
+    const urls = parseMapInput();
+    if (urls.error) {
+      imageFileHint.textContent = urls.error;
+      return;
+    }
+    if (urls.urls.length + files.length > 6) {
+      imageFileHint.textContent = "Six images maximum par rencontre : retire des URL ou sélectionne moins de fichiers.";
+      return;
+    }
+    if (files.some((file) => file.size > 5 * 1024 * 1024)) {
+      imageFileHint.textContent = "Chaque image doit faire au maximum 5 Mo.";
+      return;
+    }
+    if (files.some((file) => !fileTypes[file.type])) {
+      imageFileHint.textContent = "Formats acceptés : PNG, JPEG, WebP et GIF.";
+      return;
+    }
+    imageFileHint.textContent = files.length + " image(s) prête(s) à importer. Elles seront partagées lorsque tu publieras le guide.";
+  });
+  async function uploadSelectedImages() {
+    const files = Array.from(imageFileInput.files || []);
+    if (!files.length) return true;
+    if (!sessionStorage.getItem("jeton")) {
+      status.textContent = "Connecte-toi avec le compte Bungie propriétaire via « Connexion » avant d’importer les images.";
+      return false;
+    }
+    const parsedMap = parseMapInput();
+    if (parsedMap.error) {
+      status.textContent = parsedMap.error;
+      return false;
+    }
+    if (parsedMap.urls.length + files.length > 6) {
+      status.textContent = "Six images maximum par rencontre : retire des URL ou sélectionne moins de fichiers.";
+      return false;
+    }
+    if (files.some((file) => file.size < 1 || file.size > 5 * 1024 * 1024)) {
+      status.textContent = "Chaque image doit faire entre 1 octet et 5 Mo.";
+      return false;
+    }
+    if (files.some((file) => !fileTypes[file.type])) {
+      status.textContent = "Formats acceptés : PNG, JPEG, WebP et GIF.";
+      return false;
+    }
+    imageFileInput.disabled = true;
+    saveButton.disabled = true;
+    const urls = parsedMap.urls.slice();
+    try {
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        const fingerprint = [file.name, file.size, file.lastModified].join("|");
+        let imageUrl = completedUploads.get(fingerprint);
+        if (!imageUrl) {
+          imageFileHint.textContent = "Import de l’image " + (index + 1) + " sur " + files.length + "…";
+          const form = new FormData();
+          form.append("image", file, file.name);
+          const response = await fetch(guideImageUploadEndpoint(), {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + sessionStorage.getItem("jeton") },
+            body: form
+          });
+          let result = {};
+          try { result = await response.json(); } catch (_) {}
+          if (!response.ok || !result.url) throw new Error(result.error || "Impossible d’importer l’image.");
+          imageUrl = result.url;
+          completedUploads.set(fingerprint, imageUrl);
+        }
+        urls.push(imageUrl);
+      }
+      mapInput.value = urls.join("\n");
+      applyMaps(urls);
+      imageFileInput.value = "";
+      imageFileHint.textContent = defaultFileHint;
+      completedUploads.clear();
+      return true;
+    } catch (error) {
+      imageFileHint.textContent = "Import interrompu. Tu peux réessayer sans perdre les images déjà reçues.";
+      status.textContent = error.message || "Impossible d’importer les images. Vérifie ta connexion puis réessaie.";
+      return false;
+    } finally {
+      imageFileInput.disabled = !sharedLoaded;
+      saveButton.disabled = !sharedLoaded;
+    }
+  }
   async function publishData() {
     if (!sharedLoaded) {
       status.textContent = "Attends la fin du chargement du guide commun avant de publier.";
@@ -117,6 +227,7 @@
       return false;
     }
     saveButton.disabled = true;
+    imageFileInput.disabled = true;
     try {
       const response = await fetch(guideEndpoint(), {
         method: "PUT",
@@ -134,6 +245,7 @@
       return false;
     } finally {
       saveButton.disabled = !sharedLoaded;
+      imageFileInput.disabled = !sharedLoaded;
     }
   }
   async function loadSharedGuides() {
@@ -142,6 +254,7 @@
     resetButton.disabled = true;
     importButton.disabled = true;
     mapInput.disabled = true;
+    imageFileInput.disabled = true;
     try {
       const response = await fetch(guideEndpoint(), { headers: { "Accept": "application/json" }, cache: "no-store" });
       let result = {};
@@ -169,6 +282,7 @@
       resetButton.disabled = false;
       importButton.disabled = false;
       mapInput.disabled = false;
+      imageFileInput.disabled = false;
       mapFields();
     }
   }
@@ -314,6 +428,7 @@
     }
   });
   saveButton.addEventListener("click", async () => {
+    if (!await uploadSelectedImages()) return;
     if (collectFields()) await publishData();
   });
   resetButton.addEventListener("click", async () => {
