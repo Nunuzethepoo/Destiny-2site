@@ -16,33 +16,39 @@
     if (text !== undefined) node.textContent = text;
     return node;
   }
+  function normalizeData(parsed) {
+    return {
+      version: 1,
+      raids: parsed && parsed.raids && typeof parsed.raids === "object" ? parsed.raids : {},
+      dungeons: parsed && parsed.dungeons && typeof parsed.dungeons === "object" ? parsed.dungeons : {},
+      dungeonMeta: parsed && parsed.dungeonMeta && typeof parsed.dungeonMeta === "object" ? parsed.dungeonMeta : {}
+    };
+  }
+  function hasGuideEdits(value) {
+    return ["raids", "dungeons", "dungeonMeta"].some((key) => Object.keys(value[key] || {}).length > 0);
+  }
   function readData() {
     try {
-      const parsed = JSON.parse(localStorage.getItem(KEY) || "{}");
-      return {
-        version: 1,
-        raids: parsed.raids && typeof parsed.raids === "object" ? parsed.raids : {},
-        dungeons: parsed.dungeons && typeof parsed.dungeons === "object" ? parsed.dungeons : {},
-        dungeonMeta: parsed.dungeonMeta && typeof parsed.dungeonMeta === "object" ? parsed.dungeonMeta : {}
-      };
+      return normalizeData(JSON.parse(localStorage.getItem(KEY) || "{}"));
     } catch (_) {
-      return { version: 1, raids: {}, dungeons: {}, dungeonMeta: {} };
+      return normalizeData({});
     }
   }
   let data = readData();
   let editing = false;
   let mutating = false;
+  let sharedLoaded = false;
 
   const panel = el("section", "guide-editor");
   panel.setAttribute("aria-labelledby", "guide-editor-title");
   const heading = el("div", "guide-editor-heading");
-  heading.append(el("span", "guide-editor-kicker", "Personnalisation locale"), el("h2", "", "Adapter ce guide"));
+  heading.append(el("span", "guide-editor-kicker", "Guide partagé"), el("h2", "", "Adapter ce guide"));
   panel.appendChild(heading);
-  panel.appendChild(el("p", "guide-editor-note", "Active le mode édition, puis clique sur les textes encadrés pour les modifier. Tu peux aussi ajouter jusqu’à six images en collant une URL publique par ligne. Les changements restent enregistrés sur cet appareil."));
+  panel.appendChild(el("p", "guide-editor-note", "Active le mode édition puis modifie les textes ou les images. Clique sur « Publier pour tout le monde » pour enregistrer les changements dans le guide commun. La publication est réservée au compte Bungie propriétaire ; les visiteurs peuvent consulter la version partagée."));
   const actions = el("div", "guide-editor-actions");
   const toggleButton = el("button", "guide-editor-toggle", "Activer le mode édition");
   toggleButton.type = "button";
-  const saveButton = el("button", "guide-editor-save", "Enregistrer sur cet appareil");
+  const saveButton = el("button", "guide-editor-save", "Publier pour tout le monde");
   saveButton.type = "button";
   const resetButton = el("button", "guide-editor-secondary", "Restaurer cette activité");
   resetButton.type = "button";
@@ -64,7 +70,7 @@
   mapInput.setAttribute("aria-describedby", "guide-editor-status");
   mapLabel.appendChild(mapInput);
   panel.appendChild(mapLabel);
-  const status = el("p", "guide-editor-status", "Guide standard affiché. Tes modifications resteront privées à ce navigateur.");
+  const status = el("p", "guide-editor-status", "Chargement du guide commun…");
   status.id = "guide-editor-status";
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
@@ -85,12 +91,85 @@
     if (!bucket[id].fields || typeof bucket[id].fields !== "object") bucket[id].fields = {};
     return bucket[id];
   }
-  function persist() {
+  function persist(message) {
     try {
       localStorage.setItem(KEY, JSON.stringify(data));
-      status.textContent = "Modifications enregistrées sur cet appareil. Exporte-les pour les transférer.";
+      status.textContent = message || "Brouillon enregistré sur cet appareil. Clique sur « Publier pour tout le monde » pour le partager.";
+      return true;
     } catch (_) {
-      status.textContent = "Le navigateur n’a pas pu enregistrer ces modifications. Essaie d’exporter une sauvegarde.";
+      status.textContent = "Le navigateur n’a pas pu enregistrer le brouillon. Essaie d’exporter une sauvegarde.";
+      return false;
+    }
+  }
+  function guideEndpoint() {
+    const api = window.VIGIE_BUNGIE;
+    if (!api || typeof api.getWorkerUrl !== "function") throw new Error("Le relais VIGIE n’est pas disponible. Recharge la page.");
+    return api.getWorkerUrl().replace(/\/$/, "") + "/guides";
+  }
+  async function publishData() {
+    if (!sharedLoaded) {
+      status.textContent = "Attends la fin du chargement du guide commun avant de publier.";
+      return false;
+    }
+    const token = sessionStorage.getItem("jeton");
+    if (!token) {
+      status.textContent = "Connecte-toi avec le compte Bungie propriétaire via « Connexion », puis publie à nouveau.";
+      return false;
+    }
+    saveButton.disabled = true;
+    try {
+      const response = await fetch(guideEndpoint(), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+        body: JSON.stringify(data)
+      });
+      let result = {};
+      try { result = await response.json(); } catch (_) {}
+      if (!response.ok) throw new Error(result.error || "La publication du guide a échoué.");
+      persist();
+      status.textContent = "Publié pour tout le monde. Les visiteurs verront cette version du guide.";
+      return true;
+    } catch (error) {
+      status.textContent = error.message || "Impossible de publier le guide. Vérifie ta connexion Internet.";
+      return false;
+    } finally {
+      saveButton.disabled = !sharedLoaded;
+    }
+  }
+  async function loadSharedGuides() {
+    toggleButton.disabled = true;
+    saveButton.disabled = true;
+    resetButton.disabled = true;
+    importButton.disabled = true;
+    mapInput.disabled = true;
+    try {
+      const response = await fetch(guideEndpoint(), { headers: { "Accept": "application/json" }, cache: "no-store" });
+      let result = {};
+      try { result = await response.json(); } catch (_) {}
+      if (!response.ok || !result.edits) throw new Error(result.error || "Le guide partagé est momentanément indisponible.");
+      const shared = normalizeData(result.edits);
+      const localDraft = readData();
+      if (hasGuideEdits(shared)) {
+        data = shared;
+        try { localStorage.setItem(KEY, JSON.stringify(shared)); } catch (_) {}
+        status.textContent = "Version commune chargée pour tous les visiteurs.";
+      } else if (hasGuideEdits(localDraft)) {
+        data = localDraft;
+        status.textContent = "Anciennes modifications locales détectées. Publie-les pour les rendre visibles à tout le monde.";
+      } else {
+        data = shared;
+        status.textContent = "Guide commun chargé. Active le mode édition pour préparer des changements.";
+      }
+    } catch (error) {
+      status.textContent = (error.message || "Le guide commun est momentanément indisponible.") + " Les brouillons locaux restent disponibles.";
+    } finally {
+      sharedLoaded = true;
+      toggleButton.disabled = false;
+      saveButton.disabled = false;
+      resetButton.disabled = false;
+      importButton.disabled = false;
+      mapInput.disabled = false;
+      mapFields();
     }
   }
   function bind(node, field, scope) {
@@ -189,7 +268,7 @@
     const parsedMap = parseMapInput();
     if (parsedMap.error) {
       status.textContent = parsedMap.error;
-      return;
+      return false;
     }
     [encounterCard, document.getElementById("dungeonSummary"), document.getElementById("routeContent")]
       .filter(Boolean)
@@ -203,8 +282,9 @@
     const rec = record("main", true);
     rec.mapUrls = parsedMap.urls;
     delete rec.mapUrl;
-    persist();
+    persist("Brouillon prêt. Clique sur « Publier pour tout le monde » pour le partager.");
     applyMaps(parsedMap.urls);
+    return true;
   }
   function onInput(event) {
     const node = event.target.closest("[data-guide-field]");
@@ -230,18 +310,26 @@
       if (first) first.focus();
       status.textContent = "Mode édition actif : clique sur un texte encadré et modifie-le.";
     } else {
-      status.textContent = "Mode édition désactivé. Les dernières saisies restent enregistrées sur cet appareil.";
+      status.textContent = "Mode édition désactivé. Publie ton brouillon pour le rendre visible à tous.";
     }
   });
-  saveButton.addEventListener("click", collectFields);
-  resetButton.addEventListener("click", () => {
+  saveButton.addEventListener("click", async () => {
+    if (collectFields()) await publishData();
+  });
+  resetButton.addEventListener("click", async () => {
+    const previous = JSON.stringify(data);
     if (page === "raids") delete data.raids[selection().main];
     else {
       delete data.dungeons[selection().main];
       delete data.dungeonMeta[selection().meta];
     }
-    persist();
-    location.reload();
+    persist("Cette activité est réinitialisée dans le brouillon. Publication en cours…");
+    if (await publishData()) location.reload();
+    else {
+      data = normalizeData(JSON.parse(previous));
+      try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (_) {}
+      mapFields();
+    }
   });
   exportButton.addEventListener("click", () => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -265,9 +353,10 @@
     try {
       const incoming = JSON.parse(await file.text());
       if (!incoming || incoming.version !== 1 || !incoming.raids || !incoming.dungeons || !incoming.dungeonMeta) throw new Error("format");
-      data = { version: 1, raids: incoming.raids, dungeons: incoming.dungeons, dungeonMeta: incoming.dungeonMeta };
-      persist();
-      location.reload();
+      data = normalizeData(incoming);
+      mapFields();
+      persist("Sauvegarde importée en brouillon. Publication en cours…");
+      if (await publishData()) location.reload();
     } catch (_) {
       status.textContent = "Ce fichier n’est pas une sauvegarde VIGIE valide.";
       importFile.value = "";
@@ -340,4 +429,5 @@
   });
   [encounterCard, mapCard, summaryNode, routeContent].filter(Boolean).forEach((node) => observer.observe(node, { childList: true, subtree: true }));
   mapFields();
+  loadSharedGuides();
 })();
