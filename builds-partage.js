@@ -284,6 +284,14 @@
     }
   }
 
+  function supprimerBuildSauvegarde(index) {
+    const builds = lireBuildsLocaux();
+    if (!Number.isInteger(index) || index < 0 || index >= builds.length) return false;
+    builds.splice(index, 1);
+    localStorage.setItem("setsArmures", JSON.stringify(builds));
+    return true;
+  }
+
   const CLE_BUILDS_PARTAGES = "vigieBuildsPartagesV1";
 
   function lireBuildsPartages() {
@@ -605,7 +613,7 @@
     lower.appendChild(bonusPanel);
     card.append(statSection, lower);
 
-    if (opts.shareButton || opts.publishButton || opts.removeSharedId) {
+    if (opts.shareButton || opts.publishButton || opts.removeSharedId || opts.removeLocalIndex !== undefined) {
       const actions = document.createElement("div");
       actions.className = "shared-actions";
       const status = document.createElement("span");
@@ -642,13 +650,31 @@
       if (opts.removeSharedId) {
         const remove = document.createElement("button");
         remove.type = "button";
-        remove.className = "secondary";
-        remove.textContent = "Retirer de mes partages";
+        remove.className = "secondary danger";
+        remove.textContent = "Supprimer de mes partages";
         remove.addEventListener("click", function () {
+          if (!window.confirm("Supprimer ce build de « Mes builds partagés » sur cet appareil ? Les liens déjà copiés resteront consultables.")) return;
           retirerBuildPartage(opts.removeSharedId);
           afficherBuildsPartages();
         });
         actions.appendChild(remove);
+      }
+
+      if (opts.removeLocalIndex !== undefined) {
+        const removeLocal = document.createElement("button");
+        removeLocal.type = "button";
+        removeLocal.className = "secondary danger";
+        removeLocal.textContent = "Supprimer ce build";
+        removeLocal.addEventListener("click", function () {
+          const nom = build.name || "ce build";
+          if (!window.confirm("Supprimer « " + nom + " » des builds enregistrés sur cet appareil ? Une copie déjà ajoutée à « Mes builds partagés » devra être supprimée séparément.")) return;
+          if (!supprimerBuildSauvegarde(opts.removeLocalIndex)) {
+            status.textContent = "Ce build n’existe plus dans les sauvegardes de cet appareil.";
+            return;
+          }
+          window.location.reload();
+        });
+        actions.appendChild(removeLocal);
       }
 
       actions.appendChild(status);
@@ -765,7 +791,8 @@
     const buildsPartages = lireBuildsPartages().map(function (item) {
       return { id: item.id, build: preparerBuild(item.build) };
     });
-    const buildsLocaux = lireBuildsLocaux().map(preparerBuild);
+    const buildsLocauxBruts = lireBuildsLocaux();
+    const buildsLocaux = buildsLocauxBruts.map(preparerBuild);
     await chargerNomsFrancais(buildsPartages.map(function (item) { return item.build; }).concat(buildsLocaux));
 
     if (buildLie) {
@@ -781,8 +808,9 @@
       listeBuilds.appendChild(empty);
       return;
     }
-    buildsLocaux.slice().reverse().forEach(function (build) {
-      listeBuilds.appendChild(rendreBuild(build, { publishButton: true }));
+    buildsLocaux.slice().reverse().forEach(function (build, indexInverse) {
+      const indexOriginal = buildsLocaux.length - 1 - indexInverse;
+      listeBuilds.appendChild(rendreBuild(build, { publishButton: true, removeLocalIndex: indexOriginal }));
     });
   }
 
