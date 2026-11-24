@@ -16,7 +16,7 @@ function reply(data, status, origin) {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
       "access-control-allow-origin": origin,
-      "access-control-allow-methods": "GET, POST, OPTIONS",
+      "access-control-allow-methods": "GET, POST, PUT, OPTIONS",
       "access-control-allow-headers": "Authorization, Content-Type",
       "vary": "Origin"
     }
@@ -25,6 +25,93 @@ function reply(data, status, origin) {
 
 function fail(message, status, origin) {
   return reply({ error: message }, status, origin);
+}
+
+
+function emptyGuideData() {
+  return { version: 1, raids: {}, dungeons: {}, dungeonMeta: {} };
+}
+
+function cleanGuideText(value) {
+  return String(value).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").slice(0, 20000);
+}
+
+function cleanGuideBucket(source) {
+  const result = Object.create(null);
+  if (!source || typeof source !== "object" || Array.isArray(source)) return result;
+  for (const [id, record] of Object.entries(source).slice(0, 500)) {
+    if (!id || id.length > 120 || /[<>\u0000-\u001F]/.test(id) || ["__proto__", "prototype", "constructor"].includes(id)) continue;
+    if (!record || typeof record !== "object" || Array.isArray(record)) continue;
+    const fields = Object.create(null);
+    if (record.fields && typeof record.fields === "object" && !Array.isArray(record.fields)) {
+      for (const [field, value] of Object.entries(record.fields).slice(0, 40)) {
+        if (!/^[A-Za-z0-9_-]{1,60}$/.test(field) || typeof value !== "string") continue;
+        fields[field] = cleanGuideText(value);
+      }
+    }
+    const rawUrls = Array.isArray(record.mapUrls) ? record.mapUrls : (typeof record.mapUrl === "string" && record.mapUrl ? [record.mapUrl] : []);
+    const mapUrls = [];
+    for (const rawUrl of rawUrls.slice(0, 6)) {
+      if (typeof rawUrl !== "string" || rawUrl.length > 2048) continue;
+      try {
+        const parsed = new URL(rawUrl);
+        if ((parsed.protocol === "https:" || parsed.protocol === "http:") && parsed.hostname && !parsed.username && !parsed.password) {
+          mapUrls.push(parsed.toString());
+        }
+      } catch (_) {}
+    }
+    result[id] = { fields, mapUrls };
+  }
+  return result;
+}
+
+function cleanGuideData(input) {
+  if (!input || typeof input !== "object" || input.version !== 1) return null;
+  return {
+    version: 1,
+    raids: cleanGuideBucket(input.raids),
+    dungeons: cleanGuideBucket(input.dungeons),
+    dungeonMeta: cleanGuideBucket(input.dungeonMeta)
+  };
+}
+
+async function handleSharedGuides(request, env, siteOrigin) {
+  if (!env.VIGIE_GUIDES) return fail("La sauvegarde partagée des guides n’est pas configurée", 503, siteOrigin);
+  const key = "shared-guides-v1";
+  if (request.method === "GET") {
+    const raw = await env.VIGIE_GUIDES.get(key);
+    if (!raw) return reply({ edits: emptyGuideData(), updatedAt: null }, 200, siteOrigin);
+    try {
+      const saved = JSON.parse(raw);
+      return reply({ edits: cleanGuideData(saved.edits) || emptyGuideData(), updatedAt: saved.updatedAt || null }, 200, siteOrigin);
+    } catch (_) {
+      return fail("La sauvegarde partagée des guides est illisible", 500, siteOrigin);
+    }
+  }
+  if (request.method !== "PUT") return fail("Méthode non autorisée", 405, siteOrigin);
+  if (!env.BUNGIE_API_KEY || !env.VIGIE_GUIDE_EDITOR_ID) return fail("La publication des guides n’est pas configurée", 503, siteOrigin);
+  const authorization = request.headers.get("Authorization") || "";
+  const bearer = authorization.match(/^Bearer\s+(.+)$/i);
+  if (!bearer || bearer[1].length > 5000) return fail("Connecte-toi à Bungie pour publier les guides", 401, siteOrigin);
+
+  const identityResponse = await fetch(API + "/User/GetMembershipsForCurrentUser/", {
+    headers: { "X-API-Key": env.BUNGIE_API_KEY, "Authorization": "Bearer " + bearer[1], "Accept": "application/json" }
+  });
+  if (!identityResponse.ok) return fail("La session Bungie a expiré. Reconnecte-toi puis réessaie.", 401, siteOrigin);
+  let identity;
+  try { identity = await identityResponse.json(); } catch (_) { return fail("Bungie n’a pas retourné un profil valide", 502, siteOrigin); }
+  const editorId = String(identity && identity.Response && identity.Response.bungieNetUser && identity.Response.bungieNetUser.membershipId || "");
+  if (!editorId || editorId !== String(env.VIGIE_GUIDE_EDITOR_ID)) return fail("Ce compte Bungie n’est pas autorisé à publier les guides", 403, siteOrigin);
+
+  const raw = await request.text();
+  if (raw.length > 1000000) return fail("La sauvegarde dépasse la taille maximale autorisée", 413, siteOrigin);
+  let incoming;
+  try { incoming = JSON.parse(raw); } catch (_) { return fail("Le contenu des guides n’est pas un JSON valide", 400, siteOrigin); }
+  const edits = cleanGuideData(incoming);
+  if (!edits) return fail("Le format des guides n’est pas reconnu", 400, siteOrigin);
+  const updatedAt = new Date().toISOString();
+  await env.VIGIE_GUIDES.put(key, JSON.stringify({ edits, updatedAt }));
+  return reply({ ok: true, updatedAt }, 200, siteOrigin);
 }
 
 function allowedPath(path, method) {
@@ -145,11 +232,12 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: {
         "access-control-allow-origin": siteOrigin,
-        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-methods": "GET, POST, PUT, OPTIONS",
         "access-control-allow-headers": "Authorization, Content-Type",
         "access-control-max-age": "86400", "vary": "Origin"
       }});
     }
+    if (url.pathname === "/guides") return handleSharedGuides(request, env, siteOrigin);
     if (!env.BUNGIE_API_KEY || !env.BUNGIE_CLIENT_ID) return fail("Secrets Bungie non configurés", 503, siteOrigin);
 
     try {
