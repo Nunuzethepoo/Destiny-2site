@@ -55,12 +55,13 @@
       return {
         slot: ARMURE[index].nom,
         name: texte(piece.nom || piece.name || "Équipement", 100),
+        hash: number(piece.hash || piece.itemHash),
         icon: icone(piece.icone || piece.icon),
         exotic: Boolean(piece.exotique || piece.exotic),
         total: number(piece.total),
         stats: Array.isArray(piece.stats) ? piece.stats.slice(0, 6).map(number) : [],
         mods: (Array.isArray(piece.mods) ? piece.mods : []).slice(0, 4).map(function (mod) {
-          return { name: texte(mod.nom || mod.name || "Mod d’armure", 70), icon: icone(mod.icone || mod.icon) };
+          return { name: texte(mod.nom || mod.name || "Mod d’armure", 70), hash: number(mod.plugItemHash || mod.hash || mod.itemHash), icon: icone(mod.icone || mod.icon) };
         })
       };
     });
@@ -68,6 +69,7 @@
       return arme ? {
         slot: ARMES[index].nom,
         name: texte(arme.nom || arme.name || "Arme", 100),
+        hash: number(arme.hash || arme.itemHash),
         icon: icone(arme.icone || arme.icon)
       } : { slot: ARMES[index].nom, name: "Aucune arme", icon: "" };
     });
@@ -75,11 +77,13 @@
     const aptitudesSource = doctrineSource && (doctrineSource.aptitudes || doctrineSource.abilities) || [];
     const doctrine = doctrineSource ? {
       name: texte(doctrineSource.nom || doctrineSource.name || "Doctrine", 100),
+      hash: number(doctrineSource.hash || doctrineSource.itemHash),
       icon: icone(doctrineSource.icone || doctrineSource.icon),
       aptitudes: (Array.isArray(aptitudesSource) ? aptitudesSource : []).slice(0, 16).map(function (aptitude) {
         return {
           label: texte(aptitude.label || aptitude.type || "Aptitude", 45),
           name: texte(aptitude.nom || aptitude.name || "Aptitude", 100),
+          hash: number(aptitude.plugItemHash || aptitude.hash || aptitude.itemHash),
           icon: icone(aptitude.icone || aptitude.icon)
         };
       })
@@ -103,6 +107,98 @@
       doctrine: doctrine,
       bonus: bonus
     };
+  }
+
+  function normaliserNomItem(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("fr").replace(/[’‘]/g, "'").replace(/\s+/g, " ").trim();
+  }
+
+  async function chargerNomsFrancais(builds) {
+    const equipements = [];
+    (builds || []).forEach(function (build) {
+      (Array.isArray(build && build.weapons) ? build.weapons : []).concat(Array.isArray(build && build.armor) ? build.armor : []).forEach(function (item) {
+        if (!item || typeof item !== "object") return;
+        equipements.push(item);
+        (Array.isArray(item.mods) ? item.mods : []).forEach(function (mod) {
+          if (mod && typeof mod === "object") equipements.push(mod);
+        });
+      });
+      const doctrine = build && build.doctrine;
+      if (doctrine && typeof doctrine === "object") {
+        equipements.push(doctrine);
+        (Array.isArray(doctrine.aptitudes) ? doctrine.aptitudes : []).forEach(function (aptitude) {
+          if (aptitude && typeof aptitude === "object") equipements.push(aptitude);
+        });
+      }
+    });
+    const itemsAvecHash = equipements.filter(function (item) { return Number(item.hash || item.itemHash) > 0; });
+    if (!itemsAvecHash.length || !window.VIGIE_BUNGIE) return;
+
+    try {
+      const manifestResponse = await window.VIGIE_BUNGIE.fetchApi("/Destiny2/Manifest/");
+      const manifestData = await manifestResponse.json();
+      if (!manifestResponse.ok || manifestData.ErrorStatus !== "Success") return;
+      const manifest = manifestData.Response || {};
+      const chemins = manifest.jsonWorldComponentContentPaths || {};
+      const localeFr = Object.keys(chemins).find(function (locale) {
+        const normalized = locale.toLowerCase();
+        return normalized === "fr" || normalized.indexOf("fr-") === 0;
+      });
+      const cheminsFr = chemins.fr || (localeFr ? chemins[localeFr] : {}) || {};
+      const cheminLite = cheminsFr.DestinyInventoryItemLiteDefinition;
+      const cheminComplet = cheminsFr.DestinyInventoryItemDefinition;
+      const cheminFr = cheminLite || cheminComplet;
+      if (!cheminFr) return;
+
+      let cache = { version: manifest.version, names: {} };
+      try {
+        const saved = JSON.parse(localStorage.getItem("vigiePartageNomsFrancaisV1") || "null");
+        if (saved && saved.version === manifest.version && saved.names && typeof saved.names === "object") cache = saved;
+      } catch (_) {}
+      const hashesManquants = Array.from(new Set(itemsAvecHash.map(function (item) {
+        return String(Number(item.hash || item.itemHash));
+      }))).filter(function (hash) { return !cache.names[hash]; });
+
+      async function lireDefinitions(path) {
+        const response = await window.VIGIE_BUNGIE.fetchPublic(path);
+        if (!response.ok) throw new Error("Manifest français indisponible");
+        return response.json();
+      }
+      if (hashesManquants.length) {
+        const definitions = await lireDefinitions(cheminFr);
+        hashesManquants.forEach(function (hash) {
+          const definition = definitions[hash];
+          const name = definition && definition.displayProperties && definition.displayProperties.name;
+          if (typeof name === "string" && name.trim()) cache.names[hash] = name.trim();
+        });
+      }
+      const hashesToujoursManquants = hashesManquants.filter(function (hash) { return !cache.names[hash]; });
+      if (hashesToujoursManquants.length && cheminComplet && cheminComplet !== cheminFr) {
+        try {
+          const definitionsCompletes = await lireDefinitions(cheminComplet);
+          hashesToujoursManquants.forEach(function (hash) {
+            const definition = definitionsCompletes[hash];
+            const name = definition && definition.displayProperties && definition.displayProperties.name;
+            if (typeof name === "string" && name.trim()) cache.names[hash] = name.trim();
+          });
+        } catch (_) {}
+      }
+      try { localStorage.setItem("vigiePartageNomsFrancaisV1", JSON.stringify(cache)); } catch (_) {}
+
+      const traductionsParNom = new Map();
+      itemsAvecHash.forEach(function (item) {
+        const nameFr = cache.names[String(Number(item.hash || item.itemHash))];
+        if (!nameFr) return;
+        if (item.name) traductionsParNom.set(normaliserNomItem(item.name), nameFr);
+        item.name = nameFr;
+      });
+      equipements.forEach(function (item) {
+        const traduction = traductionsParNom.get(normaliserNomItem(item.name));
+        if (traduction) item.name = traduction;
+      });
+    } catch (_) {
+      // Si le manifeste ne répond pas, la fiche reste utilisable avec les noms fournis par le build.
+    }
   }
 
   function base64url(bytes) {
@@ -225,11 +321,11 @@
     localStorage.setItem(CLE_BUILDS_PARTAGES, JSON.stringify(builds));
   }
 
-  function afficherBuildsPartages() {
+  function afficherBuildsPartages(buildsTraduits) {
     const liste = document.getElementById("buildsPartages");
     if (!liste) return;
     while (liste.firstChild) liste.removeChild(liste.firstChild);
-    const builds = lireBuildsPartages();
+    const builds = Array.isArray(buildsTraduits) ? buildsTraduits : lireBuildsPartages();
     if (!builds.length) {
       const empty = document.createElement("p");
       empty.className = "shared-empty-card";
@@ -656,28 +752,37 @@
     const listeBuilds = document.getElementById("buildsLocaux");
     const message = document.getElementById("partageMessage");
     const lien = new URLSearchParams(location.hash.replace(/^#/, "")).get("b");
+    let buildLie = null;
     if (lien) {
       try {
-        const build = await decoder(location.hash);
-        sectionPartage.appendChild(rendreBuild(build, { shareButton: true, preview: true }));
-        document.getElementById("partageIntro").textContent = "Fiche de build autonome : équipement, stats, doctrine, aptitudes et bonus de set.";
+        buildLie = await decoder(location.hash);
       } catch (erreur) {
         message.hidden = false;
         message.textContent = erreur.message || "Ce lien de partage ne peut pas être ouvert.";
       }
     }
 
-    afficherBuildsPartages();
-    const builds = lireBuildsLocaux();
-    if (!builds.length) {
+    const buildsPartages = lireBuildsPartages().map(function (item) {
+      return { id: item.id, build: preparerBuild(item.build) };
+    });
+    const buildsLocaux = lireBuildsLocaux().map(preparerBuild);
+    await chargerNomsFrancais(buildsPartages.map(function (item) { return item.build; }).concat(buildsLocaux));
+
+    if (buildLie) {
+      sectionPartage.appendChild(rendreBuild(buildLie, { shareButton: true, preview: true }));
+      document.getElementById("partageIntro").textContent = "Fiche de build autonome : équipement, stats, doctrine, aptitudes et bonus de set.";
+    }
+
+    afficherBuildsPartages(buildsPartages);
+    if (!buildsLocaux.length) {
       const empty = document.createElement("p");
       empty.className = "shared-empty-card";
       empty.textContent = "Aucun build sauvegardé sur cet appareil. Crée et sauvegarde un build dans le générateur ; il restera privé jusqu’à ce que tu choisisses « Partager ce build ».";
       listeBuilds.appendChild(empty);
       return;
     }
-    builds.slice().reverse().forEach(function (build) {
-      listeBuilds.appendChild(rendreBuild(preparerBuild(build), { publishButton: true }));
+    buildsLocaux.slice().reverse().forEach(function (build) {
+      listeBuilds.appendChild(rendreBuild(build, { publishButton: true }));
     });
   }
 
