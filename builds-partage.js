@@ -246,11 +246,11 @@
     });
   }
 
-  function creerImageSynthese(build) {
+  function creerImageSynthese(build, onImageUpdate) {
     const canvas = document.createElement("canvas");
     canvas.width = 1200; canvas.height = 675;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return "";
+    if (!ctx) return { url: "", pending: false };
     const couleurClasse = ["#d98168", "#78c1d8", "#d5b56c"][Number(build.classId)] || "#8bd8dc";
     const fond = ctx.createLinearGradient(0, 0, 1200, 675);
     fond.addColorStop(0, "#1b2834"); fond.addColorStop(0.55, "#101820"); fond.addColorStop(1, "#090e13");
@@ -261,6 +261,16 @@
     function texte(value, x, y, font, color, largeur) {
       ctx.font = font; ctx.fillStyle = color;
       ctx.fillText(String(value == null ? "" : value), x, y, largeur);
+    }
+    function publierImage(ready) {
+      try {
+        const url = canvas.toDataURL("image/png");
+        if (onImageUpdate && ready) onImageUpdate(url, true);
+        return url;
+      } catch (_) {
+        if (onImageUpdate && ready) onImageUpdate("", true);
+        return "";
+      }
     }
     ctx.fillStyle = "#8bd8dc"; ctx.fillRect(48, 44, 5, 95);
     texte("VIGIE  /  BUILD DU GARDIEN", 68, 41, "700 17px Arial", "#8bd8dc", 720);
@@ -274,17 +284,40 @@
     texte(build.power ? String(build.power) : "VIGIE", 997, 83, "700 30px Arial", "#f0dfbd", 130);
 
     texte("ÉQUIPEMENT", 48, 207, "700 14px Arial", "#c99f5b", 690);
-    const equipements = (build.weapons || []).concat(build.armor || []);
+    const equipements = (build.weapons || []).concat(build.armor || []).slice(0, 8);
     const largeurCarte = 224, hauteurCarte = 96, espace = 10;
-    equipements.slice(0, 8).forEach(function (item, index) {
+    let iconesRestantes = equipements.filter(function (item) { return Boolean(icone(item.icon)); }).length;
+    function terminerChargementIcone() {
+      iconesRestantes -= 1;
+      if (iconesRestantes <= 0) publierImage(true);
+    }
+    equipements.forEach(function (item, index) {
       const colonne = index % 3, ligne = Math.floor(index / 3);
       const x = 48 + colonne * (largeurCarte + espace), y = 235 + ligne * (hauteurCarte + 10);
       ctx.fillStyle = "#111a22"; ctx.fillRect(x, y, largeurCarte, hauteurCarte);
       ctx.strokeStyle = item.exotic ? "#d5a748" : "#526171";
       ctx.strokeRect(x + 0.5, y + 0.5, largeurCarte - 1, hauteurCarte - 1);
       ctx.fillStyle = item.exotic ? "#d5a748" : "#8bd8dc"; ctx.fillRect(x, y, 3, hauteurCarte);
-      texte(String(item.slot || "Équipement").toUpperCase() + (item.exotic ? "  ·  EXO" : ""), x + 12, y + 12, "700 10px Arial", "#9aaab7", largeurCarte - 23);
-      texte(item.name || "Aucun équipement", x + 12, y + 37, "700 16px Arial", "#edf1f4", largeurCarte - 23);
+      const iconX = x + 10, iconY = y + 17, iconSize = 62;
+      ctx.fillStyle = "#090e13"; ctx.fillRect(iconX, iconY, iconSize, iconSize);
+      ctx.strokeStyle = "#536171"; ctx.strokeRect(iconX + 0.5, iconY + 0.5, iconSize - 1, iconSize - 1);
+      texte(item.slot || "Équipement", x + 82, y + 17, "700 10px Arial", "#9aaab7", 128);
+      texte(item.exotic ? "EXOTIQUE" : (index < 3 ? "ARME" : "ARMURE"), x + 82, y + 34, "700 9px Arial", item.exotic ? "#edc56f" : "#8bd8dc", 128);
+      texte(item.name || "Aucun équipement", x + 82, y + 51, "700 15px Arial", "#edf1f4", 130);
+      const iconPath = icone(item.icon);
+      if (!iconPath) return;
+      const icon = new Image();
+      icon.crossOrigin = "anonymous";
+      icon.onload = function () {
+        try {
+          ctx.drawImage(icon, iconX + 2, iconY + 2, iconSize - 4, iconSize - 4);
+          ctx.strokeStyle = item.exotic ? "#e6bb72" : "#536171";
+          ctx.strokeRect(iconX + 0.5, iconY + 0.5, iconSize - 1, iconSize - 1);
+        } catch (_) {}
+        terminerChargementIcone();
+      };
+      icon.onerror = terminerChargementIcone;
+      icon.src = "https://vigie-bungie-api.loic-reniau.workers.dev/destiny-icon?path=" + encodeURIComponent(iconPath);
     });
 
     texte("STATS", 774, 207, "700 14px Arial", "#c99f5b", 370);
@@ -302,9 +335,8 @@
     texte("BONUS DE SET", 48, 584, "700 11px Arial", "#c99f5b", 130);
     texte(bonus, 162, 580, "600 15px Arial", "#d9e1e8", 650);
     texte("IMAGE CLIQUABLE · FICHE DÉTAILLÉE", 842, 585, "700 11px Arial", "#8bd8dc", 302);
-    try { return canvas.toDataURL("image/png"); } catch (_) { return ""; }
+    return { url: publierImage(false), pending: iconesRestantes > 0 };
   }
-
   function image(path, className, alt) {
     const url = icone(path);
     if (!url) return null;
@@ -528,16 +560,33 @@
     }
 
     if (opts.preview) {
-      const synthese = creerImageSynthese(build);
+      const nomFichier = String(build.name || "build").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "build";
+      let imageApercu = null, telechargementImage = null, derniereSynthese = "", imageInitiale = "";
+      const synthese = creerImageSynthese(build, function (dataUrl, termine) {
+        if (dataUrl) {
+          derniereSynthese = dataUrl;
+          if (imageApercu) imageApercu.src = dataUrl;
+        }
+        if (termine && telechargementImage) {
+          const telechargement = dataUrl || imageInitiale;
+          if (telechargement) {
+            telechargementImage.href = telechargement;
+            telechargementImage.download = "VIGIE-" + nomFichier + ".png";
+            telechargementImage.removeAttribute("aria-disabled");
+            telechargementImage.textContent = dataUrl ? "Télécharger l’image PNG" : "Télécharger sans les icônes";
+          }
+        }
+      });
+      imageInitiale = synthese.url;
       const entree = document.createElement("div");
       entree.className = "shared-build-entry";
       const apercu = document.createElement("button");
       apercu.type = "button"; apercu.className = "shared-build-preview";
       apercu.setAttribute("aria-expanded", "false");
       apercu.setAttribute("aria-label", "Afficher les détails du build " + build.name);
-      if (synthese) {
-        const imageApercu = document.createElement("img");
-        imageApercu.src = synthese;
+      if (synthese.url) {
+        imageApercu = document.createElement("img");
+        imageApercu.src = derniereSynthese || synthese.url;
         imageApercu.alt = "Synthèse visuelle de " + build.name + ". Clique pour afficher le build complet.";
         imageApercu.loading = "lazy";
         apercu.appendChild(imageApercu);
@@ -554,13 +603,22 @@
         if (ouvert) card.scrollIntoView({ block: "nearest", behavior: "smooth" });
       });
       entree.appendChild(apercu);
-      if (synthese) {
-        const telecharger = document.createElement("a");
-        const nomFichier = String(build.name || "build").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "build";
+      if (synthese.url) {
+        telechargementImage = document.createElement("a");
+        const telecharger = telechargementImage;
         telecharger.className = "shared-image-download";
-        telecharger.href = synthese;
-        telecharger.download = "VIGIE-" + nomFichier + ".png";
-        telecharger.textContent = "Télécharger l’image PNG";
+        if (synthese.pending) {
+          telecharger.href = "#";
+          telecharger.setAttribute("aria-disabled", "true");
+          telecharger.textContent = "Chargement des icônes du jeu…";
+          telecharger.addEventListener("click", function (event) {
+            if (telecharger.getAttribute("aria-disabled") === "true") event.preventDefault();
+          });
+        } else {
+          telecharger.href = derniereSynthese || synthese.url;
+          telecharger.download = "VIGIE-" + nomFichier + ".png";
+          telecharger.textContent = "Télécharger l’image PNG";
+        }
         entree.appendChild(telecharger);
       }
       card.hidden = true;

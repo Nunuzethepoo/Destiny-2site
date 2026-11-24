@@ -55,3 +55,21 @@ body:before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.11;ba
   .vigie-menu-panel{top:calc(100% + 5px);left:0;min-width:190px}
   .vigie-login{padding:8px 9px!important}
 }
+
+/* Editeur des guides raids et donjons */
+.guide-editor{margin:14px 0 18px;padding:15px;border:1px solid #8bd8dc39;border-top:2px solid var(--cyan);border-radius:4px;background:linear-gradient(145deg,#13212a,#0d141b)}
+.guide-editor-heading{display:flex;align-items:center;gap:10px}.guide-editor-kicker{color:var(--cyan);font-size:8px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase}.guide-editor h2{margin:0;color:#edf2f4;font:700 20px 'Barlow Condensed';letter-spacing:.06em;text-transform:uppercase}
+.guide-editor-note{max-width:850px;margin:8px 0 12px;color:#aab8c2;font-size:10px;line-height:1.6}
+.guide-editor-actions{display:flex;flex-wrap:wrap;gap:7px}
+.page .guide-editor-actions button{min-height:34px;padding:8px 10px;font-size:9px;letter-spacing:.04em}
+.page .guide-editor-actions .guide-editor-secondary{border-color:#566370;background:#111a22;color:#cbd4dc}
+.page .guide-editor-actions .guide-editor-secondary:hover{border-color:var(--cyan);color:#e8f7f7}
+.guide-editor-map-label{display:grid!important;gap:6px!important;max-width:540px;margin-top:12px;color:#bbc7d0!important;font-size:9px!important;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.guide-editor-map-label input{width:100%}
+.guide-editor-status{min-height:15px;margin:9px 0 0;color:var(--cyan);font-size:9px;line-height:1.5}
+.guide-editor.is-editing{border-color:#e6bb7280}
+.guide-editor-editable{white-space:pre-wrap;outline:1px dashed #8bd8dc88;outline-offset:2px;background:#8bd8dc08;cursor:text}
+.guide-editor-editable:focus{outline:2px solid var(--gold);background:#e6bb720b}
+.guide-custom-map{margin:12px 0 5px;padding:6px;border:1px dashed #8bd8dc70;background:#080d12}
+.guide-custom-map img{display:block;width:100%;max-height:65vh;object-fit:contain}
+@media(max-width:620px){.guide-editor{padding:12px}.guide-editor-heading{align-items:flex-start;flex-direction:column;gap:4px}.guide-editor-actions button{flex:1 1 45%}.guide-editor-map-label{max-width:none}}

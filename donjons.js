@@ -131,7 +131,7 @@ const DONJONS=[{"id":"shattered-throne","name":"Le Trône brisé","original":"Th
     d.encounters.forEach(function(item,i){var b=el("button","",String(i+1).padStart(2,"0")+" · "+item.title);b.type="button";b.setAttribute("aria-pressed",i===currentEncounter?"true":"false");b.addEventListener("click",function(){currentEncounter=i;render();});nav.appendChild(b);});
     card.replaceChildren();
     card.append(el("h3","",e.title),el("p","encounter-goal",e.goal));
-    var team=el("div","encounter-team");var bold=el("strong","","Rôles et organisation");team.append(bold,document.createElement("br"),document.createTextNode(e.team));card.appendChild(team);
+    var team=el("div","encounter-team");var bold=el("strong","","Rôles et organisation");var teamCopy=el("span","guide-team-copy",e.team);team.append(bold,document.createElement("br"),teamCopy);card.appendChild(team);
     var list=el("ol","step-list");e.steps.forEach(function(step,i){var row=el("li","step-card");var num=el("span","step-no",String(i+1));var copy=el("p","",step);row.append(num,copy);list.appendChild(row);});card.appendChild(list);
     var recovery=el("section","recovery-box");recovery.append(el("h4","","Si la mécanique bloque"),el("p","",e.recovery));card.appendChild(recovery);
     var source=el("a","guide-source","Guide de référence complet en anglais ↗");source.href=d.source;source.target="_blank";source.rel="noopener noreferrer";card.appendChild(source);

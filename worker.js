@@ -90,12 +90,57 @@ async function proxyDungeonImage(request, url, siteOrigin) {
   });
 }
 
+async function proxyBungieIcon(request, url, siteOrigin) {
+  const headers = {
+    "access-control-allow-origin": siteOrigin || "null",
+    "cross-origin-resource-policy": "cross-origin",
+    "x-content-type-options": "nosniff",
+    "vary": "Origin",
+    "cache-control": "public, max-age=86400, s-maxage=604800"
+  };
+  const failImage = (message, status) => new Response(message, {
+    status,
+    headers: { ...headers, "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" }
+  });
+  if (request.method !== "GET") return failImage("Méthode non autorisée", 405);
+  let refererOrigin = "";
+  try { refererOrigin = new URL(request.headers.get("Referer") || "").origin; } catch {}
+  if (!siteOrigin || (request.headers.get("Origin") !== siteOrigin && refererOrigin !== siteOrigin)) {
+    return failImage("Origine non autorisée", 403);
+  }
+  const assetPath = url.searchParams.get("path") || "";
+  const prefix = "/common/destiny2_content/icons/";
+  const iconName = assetPath.startsWith(prefix) ? assetPath.slice(prefix.length) : "";
+  const extension = iconName.split(".").pop().toLowerCase();
+  if (!iconName || assetPath.includes("..") || /[^A-Za-z0-9_./-]/.test(iconName) || !["png", "jpg", "jpeg", "webp"].includes(extension)) {
+    return failImage("Icône inconnue", 404);
+  }
+  let upstream;
+  try {
+    upstream = await fetch(new URL(assetPath, "https://www.bungie.net"), {
+      headers: { "accept": "image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8", "referer": "https://www.bungie.net/" }
+    });
+  } catch {
+    return failImage("Bungie ne répond pas", 502);
+  }
+  const contentType = (upstream.headers.get("content-type") || "").toLowerCase();
+  if (!upstream.ok || !contentType.startsWith("image/")) {
+    console.error("bungie_icon_source_error", upstream.status);
+    return failImage("L’icône Bungie n’est pas disponible", 502);
+  }
+  return new Response(upstream.body, {
+    status: 200,
+    headers: { ...headers, "content-type": contentType }
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin") || "";
     const siteOrigin = env.SITE_ORIGIN || "";
     if (url.pathname === "/image") return proxyDungeonImage(request, url, siteOrigin);
+    if (url.pathname === "/destiny-icon") return proxyBungieIcon(request, url, siteOrigin);
     if (!siteOrigin || origin !== siteOrigin) return fail("Origin non autorisée", 403, siteOrigin || "null");
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: {
