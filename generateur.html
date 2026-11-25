@@ -572,7 +572,7 @@
           option.stats.forEach(function (value, k) {
             const actuel = base[k] + bonus[k];
             progresCible += Math.min(Math.max(0, ciblesParPiece[k] - actuel), Math.max(0, value));
-            valeurPriorite += value * poids[k];
+            valeurPriorite += Math.min(Math.max(0, MAX_STAT - actuel), Math.max(0, value)) * poids[k];
           });
           const valeur = progresCible * 100000 + valeurPriorite;
           if (valeur <= 0) continue;
@@ -664,8 +664,10 @@
       let meilleurScore = -Infinity;
       let meilleursTotaux = null;
       let meilleursPlans = null;
-      const planInitial = choix.map(function (c) { return (c.modPlan || []).map(function (mod) { return Object.assign({}, mod); }); });
-      const totauxInitiaux = totauxDuPlan(planInitial);
+      // Partir sans mods évite de conserver un plan heuristique qui dépasse
+      // déjà le plafond réel de 200 et n'améliore donc plus le build.
+      const planInitial = Array.from({ length: nombresPieces }, function () { return []; });
+      const totauxInitiaux = totauxBase.slice();
       meilleurScore = scoreStats(totauxInitiaux);
       meilleursTotaux = totauxInitiaux;
       meilleursPlans = planInitial;
@@ -1911,10 +1913,13 @@
 
         // Afficher les six valeurs même si une définition de nom manque.
         const nomsStatsSecours = ["Mobilité", "Résistance", "Récupération", "Discipline", "Intellect", "Force"];
-        const totaux = resultat.totaux || STATS_ARMURE.map(function (_, k) {
+        const totauxBruts = resultat.totaux || STATS_ARMURE.map(function (_, k) {
           return resultat.choix.reduce(function (somme, choix) {
             return somme + Number(choix.v && choix.v[k] || 0);
           }, 0);
+        });
+        const totaux = totauxBruts.map(function (valeur) {
+          return Math.min(MAX_STAT, Math.max(0, Number(valeur) || 0));
         });
         const blocStats = document.createElement("div");
         blocStats.className = "build-stats";
@@ -1924,10 +1929,9 @@
         blocStats.appendChild(titreStats);
         const grilleStats = document.createElement("div");
         grilleStats.className = "build-stat-grid";
-        let depasse = false;
+        const depasse = totauxBruts.some(function (valeur) { return Number(valeur) > MAX_STAT; });
         STATS_ARMURE.forEach(function (hash, k) {
           const valeur = Number(totaux[k]) || 0;
-          if (valeur > MAX_STAT) depasse = true;
           const cellule = document.createElement("div");
           cellule.className = "build-stat";
           const nom = document.createElement("span");
@@ -1961,7 +1965,7 @@
         if (depasse) {
           const note = document.createElement("p");
           note.className = "stats";
-          note.textContent = "Au-delà de " + MAX_STAT + ", les points supplémentaires ne montent plus le niveau de stat.";
+          note.textContent = "Plafond atteint : le build affiche " + MAX_STAT + " au maximum. Les points excédentaires ne sont pas comptabilisés.";
           blocStats.appendChild(note);
         }
         bloc.appendChild(blocStats);
