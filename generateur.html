@@ -477,6 +477,7 @@
       const listes = [];
       if (Array.isArray(plugsInstance)) listes.push(plugsInstance);
       if (Array.isArray(plugsDefinition)) listes.push(plugsDefinition);
+      if (socket && Array.isArray(socket.reusablePlugs)) listes.push(socket.reusablePlugs);
       if (socket && Array.isArray(socket.reusablePlugItems)) listes.push(socket.reusablePlugItems);
       const ensembles = Array.isArray(hashSets) ? hashSets : [hashSets];
       for (const hashSet of ensembles) {
