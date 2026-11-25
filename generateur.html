@@ -241,6 +241,7 @@
     };
     const ORDRE = ["Casque", "Gants", "Torse", "Jambes", "Objet de classe"];
     const STATS_ARMURE = [2996146975, 392767087, 1943323491, 1735777505, 144602215, 4244567218];
+    const NOMS_STATS_ARMURE = ["Armes", "Santé", "Classe", "Grenade", "Super", "Mêlée"];
     const BUCKETS_ARMES = {
       1498876634: { nom: "Cinétique", id: "armeCinétique" },
       2465295065: { nom: "Énergie", id: "armeÉnergie" },
@@ -737,7 +738,8 @@
 
     function nomStat(hash) {
       const definition = definitionsStats[hash];
-      return definition ? definition.displayProperties.name : "Stat " + hash;
+      const index = STATS_ARMURE.indexOf(Number(hash));
+      return definition ? definition.displayProperties.name : (NOMS_STATS_ARMURE[index] || "Stat " + hash);
     }
 
     function texteStats(stats) {
@@ -1912,7 +1914,7 @@
         }
 
         // Afficher les six valeurs même si une définition de nom manque.
-        const nomsStatsSecours = ["Mobilité", "Résistance", "Récupération", "Discipline", "Intellect", "Force"];
+        const nomsStatsSecours = NOMS_STATS_ARMURE;
         const totauxBruts = resultat.totaux || STATS_ARMURE.map(function (_, k) {
           return resultat.choix.reduce(function (somme, choix) {
             return somme + Number(choix.v && choix.v[k] || 0);
@@ -1953,7 +1955,7 @@
           if (!objectifsManques.length) {
             resumeObjectifs.textContent = "Tous les minimums demandés sont atteints avec les mods sélectionnés.";
           } else {
-            const nomsStatsSecours = ["Mobilité", "Résistance", "Récupération", "Discipline", "Intellect", "Force"];
+            const nomsStatsSecours = NOMS_STATS_ARMURE;
             resumeObjectifs.textContent = "Meilleur résultat disponible ; minimums non atteints : " + objectifsManques.map(function (objectif) {
               const definition = definitionsStats[STATS_ARMURE[objectif.index]];
               const nom = definition && definition.displayProperties && definition.displayProperties.name || nomsStatsSecours[objectif.index];
