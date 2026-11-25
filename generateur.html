@@ -345,9 +345,9 @@
         return Boolean(BUCKETS_ARMES[bucket]);
       });
       const objets = Object.assign({}, cache.objets);
-      // Les définitions sont mises en cache en version compacte. Une ancienne entrée
-      // sans marqueur est rechargée une fois pour récupérer les prises utiles aux mods.
-      const hashesArmureManquants = hashesArmureReels.filter(function (hash) { return !objets[hash] || !objets[hash]._vigieSocketsCachedFr; });
+      // Les définitions en cache doivent conserver les prises normales et aléatoires.
+      // V2 force le renouvellement des entrées compactées par l'ancien format.
+      const hashesArmureManquants = hashesArmureReels.filter(function (hash) { return !objets[hash] || !objets[hash]._vigieSocketsCachedFrV2; });
       let prochain = 0;
       let charges = 0;
       const nombreWorkers = Math.min(4, hashesArmureManquants.length);
@@ -446,12 +446,15 @@
             socketEntries: (definition.sockets && definition.sockets.socketEntries || []).map(function (entree) {
               return {
                 reusablePlugSetHash: entree.reusablePlugSetHash || 0,
+                randomizedPlugSetHash: entree.randomizedPlugSetHash || 0,
+                plugSources: entree.plugSources || 0,
                 reusablePlugItems: (entree.reusablePlugItems || []).map(function (plug) { return { plugItemHash: plug.plugItemHash }; })
               };
             })
           },
           _vigieSocketsCached: true,
-          _vigieSocketsCachedFr: true
+          _vigieSocketsCachedFr: true,
+          _vigieSocketsCachedFrV2: true
         };
       });
       hashesSets.forEach(function (hash) { if (sets[hash]) setsEnCache[hash] = sets[hash]; });
@@ -1634,8 +1637,9 @@
           ));
         }
       }
-      message.textContent = "Analyse des mods de statistiques disponibles…";
-      await chargerDefinitionsMods(Array.from(new Set(hashesMods)));
+      const hashesModsUniques = Array.from(new Set(hashesMods));
+      message.textContent = "Analyse de " + hashesModsUniques.length + " mods possibles…";
+      await chargerDefinitionsMods(hashesModsUniques);
       const cataloguesMods = {};
       let nombreModsStatDisponibles = 0;
       for (const piece of toutesLesArmures) {
@@ -1773,7 +1777,7 @@
       meilleurs.sort(function (a, b) { return b.score - a.score; });
       afficherResultats(meilleurs, interrompu, bonusChoisi, contexte, minimums);
       if (nombreModsStatDisponibles === 0) {
-        message.textContent = "Bungie n’a renvoyé aucun mod de statistique compatible pour tes armures. Le générateur ne peut donc pas ajuster les mods cette fois : actualise l’inventaire puis relance le calcul.";
+        message.textContent = "Aucun mod de statistique compatible détecté (" + hashesModsUniques.length + " mods candidats reçus de Bungie). Le générateur ne peut pas ajuster ce build.";
       }
     }
 
