@@ -1645,9 +1645,11 @@
       }
 
       const hashesMods = [];
+      let nombreSocketsAnalysees = 0;
       for (const piece of toutesLesArmures) {
         const socketData = socketParInstance[piece.idInstance] || {};
         const sockets = socketData.sockets || [];
+        nombreSocketsAnalysees += sockets.length;
         const plugsInstance = (reusablePlugsParInstance[piece.idInstance] && reusablePlugsParInstance[piece.idInstance].plugs) || {};
         const definition = piece.definition;
         for (let i = 0; i < sockets.length; i++) {
@@ -1802,7 +1804,7 @@
       meilleurs.sort(function (a, b) { return b.score - a.score; });
       afficherResultats(meilleurs, interrompu, bonusChoisi, contexte, minimums);
       if (nombreModsStatDisponibles === 0) {
-        message.textContent = "Aucun mod de statistique compatible détecté (" + hashesModsUniques.length + " mods candidats reçus de Bungie). Le générateur ne peut pas ajuster ce build.";
+        message.textContent = "Aucun mod de statistique compatible détecté (" + hashesModsUniques.length + " candidats, " + nombreSocketsAnalysees + " prises examinées, " + ensemblesModsUniques.length + " ensembles lus). Le générateur ne peut pas ajuster ce build.";
       }
     }
 
