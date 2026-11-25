@@ -268,6 +268,7 @@
     let chargementsAptitudes = {};
     let requeteAptitudes = 0;
     let socketParInstance = {};
+    let reusablePlugsParInstance = {};
     let definitionMods = {};
     let characterPlugSets = {};
     let profilePlugSets = {};
@@ -471,18 +472,24 @@
       return { objets: objets, objetsLite: objetsLite, stats: stats, sets: sets, perks: perks, nomsEquipementFr: nomsEquipementFr, nombreArmures: hashesArmureReels.length };
     }
 
-    function plugsPourSocket(socket, hashSet) {
+    function plugsPourSocket(socket, hashSets, plugsDefinition, plugsInstance) {
       const resultat = [];
       const listes = [];
+      if (Array.isArray(plugsInstance)) listes.push(plugsInstance);
+      if (Array.isArray(plugsDefinition)) listes.push(plugsDefinition);
       if (socket && Array.isArray(socket.reusablePlugItems)) listes.push(socket.reusablePlugItems);
-      if (hashSet && profilePlugSets[hashSet]) listes.push(profilePlugSets[hashSet]);
-      for (const id in characterPlugSets) {
-        const liste = characterPlugSets[id] && characterPlugSets[id][hashSet];
-        if (liste) listes.push(liste);
+      const ensembles = Array.isArray(hashSets) ? hashSets : [hashSets];
+      for (const hashSet of ensembles) {
+        if (!hashSet) continue;
+        if (profilePlugSets[hashSet]) listes.push(profilePlugSets[hashSet]);
+        for (const id in characterPlugSets) {
+          const liste = characterPlugSets[id] && characterPlugSets[id][hashSet];
+          if (liste) listes.push(liste);
+        }
       }
-      for (const liste of listes) for (const plug of liste) {
-        const hash = Number(plug.plugItemHash || plug.itemHash);
-        if (hash && (plug.canInsert !== false) && resultat.indexOf(hash) === -1) resultat.push(hash);
+      for (const liste of listes) for (const plug of liste || []) {
+        const hash = Number(plug && (plug.plugItemHash || plug.itemHash));
+        if (hash && plug.canInsert !== false && resultat.indexOf(hash) === -1) resultat.push(hash);
       }
       if (socket && socket.plugHash && resultat.indexOf(Number(socket.plugHash)) === -1) resultat.push(Number(socket.plugHash));
       return resultat;
@@ -515,14 +522,16 @@
     function catalogueModsPiece(piece) {
       const socketData = socketParInstance[piece.idInstance] || {};
       const sockets = socketData.sockets || [];
+      const plugsInstance = (reusablePlugsParInstance[piece.idInstance] && reusablePlugsParInstance[piece.idInstance].plugs) || {};
       const capacite = Number(piece.capaciteEnergie) || 10;
       const catalogue = [];
       for (let i = 0; i < sockets.length; i++) {
         const socket = sockets[i];
         const entree = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries[i];
-        if (!entree || !entree.reusablePlugSetHash) continue;
+        if (!entree) continue;
+        const ensembles = [entree.reusablePlugSetHash, entree.randomizedPlugSetHash].filter(Boolean);
+        const hashes = plugsPourSocket(socket, ensembles, entree.reusablePlugItems, plugsInstance[i] || plugsInstance[String(i)]);
         const options = [];
-        const hashes = plugsPourSocket(socket, entree.reusablePlugSetHash);
         for (const hash of hashes) {
           const definition = definitionMods[hash];
           if (!definition || !definition.plug) continue;
@@ -1589,13 +1598,14 @@
       if (!composantsModsCharges) {
         message.textContent = "Chargement des sockets et des mods de ton inventaire…";
         const profilMods = await appelerBungie(
-          "/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=300,305"
+          "/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=300,305,310"
         );
         profilePlugSets = (profilMods.profilePlugSets && profilMods.profilePlugSets.data && profilMods.profilePlugSets.data.plugs) || {};
         characterPlugSets = {};
         const plugDataPersos = profilMods.characterPlugSets && profilMods.characterPlugSets.data || {};
         for (const idPerso in plugDataPersos) characterPlugSets[idPerso] = plugDataPersos[idPerso].plugs || {};
         socketParInstance = (profilMods.itemComponents && profilMods.itemComponents.sockets && profilMods.itemComponents.sockets.data) || {};
+        reusablePlugsParInstance = (profilMods.itemComponents && profilMods.itemComponents.reusablePlugs && profilMods.itemComponents.reusablePlugs.data) || {};
         const instances = (profilMods.itemComponents && profilMods.itemComponents.instances && profilMods.itemComponents.instances.data) || {};
         for (const piece of toutesLesArmures) {
           const energie = instances[piece.idInstance] && instances[piece.idInstance].energy;
@@ -1609,15 +1619,29 @@
       for (const piece of toutesLesArmures) {
         const socketData = socketParInstance[piece.idInstance] || {};
         const sockets = socketData.sockets || [];
+        const plugsInstance = (reusablePlugsParInstance[piece.idInstance] && reusablePlugsParInstance[piece.idInstance].plugs) || {};
         const definition = piece.definition;
         for (let i = 0; i < sockets.length; i++) {
           const entree = definition && definition.sockets && definition.sockets.socketEntries[i];
-          if (!entree || !entree.reusablePlugSetHash) continue;
-          hashesMods.push.apply(hashesMods, plugsPourSocket(sockets[i], entree.reusablePlugSetHash));
+          if (!entree) continue;
+          const ensembles = [entree.reusablePlugSetHash, entree.randomizedPlugSetHash].filter(Boolean);
+          hashesMods.push.apply(hashesMods, plugsPourSocket(
+            sockets[i],
+            ensembles,
+            entree.reusablePlugItems,
+            plugsInstance[i] || plugsInstance[String(i)]
+          ));
         }
       }
       message.textContent = "Analyse des mods de statistiques disponibles…";
       await chargerDefinitionsMods(Array.from(new Set(hashesMods)));
+      const cataloguesMods = {};
+      let nombreModsStatDisponibles = 0;
+      for (const piece of toutesLesArmures) {
+        const catalogue = catalogueModsPiece(piece);
+        cataloguesMods[piece.idInstance] = catalogue;
+        catalogue.sockets.forEach(function (socket) { nombreModsStatDisponibles += socket.options.length; });
+      }
       message.textContent = "";
       const contexte = contexteBuild();
 
@@ -1635,8 +1659,8 @@
           const base = STATS_ARMURE.map(function (hash) {
             return (a.stats && a.stats[hash]) || 0;
           });
-          const catalogueMods = catalogueModsPiece(a);
-              const mods = meilleurPlanMods(a, poids, minimums, catalogueMods);
+          const catalogueMods = cataloguesMods[a.idInstance] || catalogueModsPiece(a);
+          const mods = meilleurPlanMods(a, poids, minimums, catalogueMods);
           const v = base.map(function (value, k) { return value + mods.bonus[k]; });
           const score = scoreStatsBuild(v, poids, minimums);
           return { piece: a, v: v, score: score, modPlan: mods.plan, catalogueMods: catalogueMods };
@@ -1747,6 +1771,9 @@
       }
       meilleurs.sort(function (a, b) { return b.score - a.score; });
       afficherResultats(meilleurs, interrompu, bonusChoisi, contexte, minimums);
+      if (nombreModsStatDisponibles === 0) {
+        message.textContent = "Bungie n’a renvoyé aucun mod de statistique compatible pour tes armures. Le générateur ne peut donc pas ajuster les mods cette fois : actualise l’inventaire puis relance le calcul.";
+      }
     }
 
     // ---------- L'affichage des résultats ----------
