@@ -486,6 +486,10 @@
       for (const hashSet of ensembles) {
         if (!hashSet) continue;
         if (profilePlugSets[hashSet]) listes.push(profilePlugSets[hashSet]);
+        const definitionEnsemble = definitionsPlugSetsDoctrine[hashSet];
+        if (definitionEnsemble && Array.isArray(definitionEnsemble.reusablePlugItems)) {
+          listes.push(definitionEnsemble.reusablePlugItems);
+        }
         for (const id in characterPlugSets) {
           const liste = characterPlugSets[id] && characterPlugSets[id][hashSet];
           if (liste) listes.push(liste);
@@ -1617,6 +1621,27 @@
         }
         composantsModsCharges = true;
         afficherDoctrine();
+      }
+
+      const hashesEnsemblesMods = [];
+      for (const piece of toutesLesArmures) {
+        const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
+        for (const entree of entrees) {
+          if (entree.reusablePlugSetHash) hashesEnsemblesMods.push(Number(entree.reusablePlugSetHash));
+          if (entree.randomizedPlugSetHash) hashesEnsemblesMods.push(Number(entree.randomizedPlugSetHash));
+        }
+      }
+      const ensemblesModsUniques = Array.from(new Set(hashesEnsemblesMods.filter(Boolean)));
+      let prochainEnsemble = 0;
+      async function chargerEnsemblesModsWorker() {
+        while (prochainEnsemble < ensemblesModsUniques.length) {
+          const hash = ensemblesModsUniques[prochainEnsemble++];
+          await definitionPlugSet(hash);
+        }
+      }
+      if (ensemblesModsUniques.length) {
+        message.textContent = "Lecture des ensembles de mods Bungie…";
+        await Promise.all(Array.from({ length: Math.min(4, ensemblesModsUniques.length) }, chargerEnsemblesModsWorker));
       }
 
       const hashesMods = [];
