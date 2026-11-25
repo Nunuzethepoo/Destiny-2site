@@ -7,7 +7,7 @@
     [953998645, "Puissante"]
   ]);
   const CLASSES = { 0: "Titan", 1: "Chasseur", 2: "Arcaniste" };
-  const STATS_AFFICHEES = ["Mobilité", "Résistance", "Récupération", "Discipline", "Intellect", "Force"];
+  const STATS_AFFICHEES = ["Armes", "Santé", "Classe", "Grenade", "Super", "Mêlée"];
   const STATS_ARME = {
     rpm: 4284893193,
     magazine: 3871231066,
