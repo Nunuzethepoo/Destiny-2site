@@ -1606,7 +1606,7 @@
       if (!composantsModsCharges) {
         message.textContent = "Chargement des sockets et des mods de ton inventaire…";
         const profilMods = await appelerBungie(
-          "/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=300,305,310"
+          "/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=102,200,201,205,300,304,305,310"
         );
         profilePlugSets = (profilMods.profilePlugSets && profilMods.profilePlugSets.data && profilMods.profilePlugSets.data.plugs) || {};
         characterPlugSets = {};
