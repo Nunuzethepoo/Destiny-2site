@@ -485,7 +485,7 @@
       panneau.appendChild(creerTitreSection("Statistiques du build"));
       const grille = document.createElement("div");
       grille.className = "stat-lines";
-      const noms = ["Mobilité", "Résistance", "Récupération", "Discipline", "Intellect", "Force"];
+      const noms = ["Armes", "Santé", "Classe", "Grenade", "Super", "Mêlée"];
       if (Array.isArray(set.stats) && set.stats.length) {
         noms.forEach(function (nom, index) {
           const valeur = Number(set.stats[index]) || 0;
