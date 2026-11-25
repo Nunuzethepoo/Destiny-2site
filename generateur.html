@@ -290,7 +290,12 @@
 
     async function chargerDefinitions(hashesArmure, progression) {
       const manifest = await appelerBungie("/Destiny2/Manifest/");
-      const chemins = manifest.jsonWorldComponentContentPaths[LANGUE];
+      const cheminsParLangue = manifest.jsonWorldComponentContentPaths || {};
+      const localeFr = Object.keys(cheminsParLangue).find(function (locale) {
+        const normalisee = locale.toLowerCase();
+        return normalisee === "fr" || normalisee.indexOf("fr-") === 0;
+      });
+      const chemins = cheminsParLangue[LANGUE] || (localeFr && cheminsParLangue[localeFr]) || {};
       let cache = { version: manifest.version, objets: {}, sets: {}, perks: {}, stats: null };
       try {
         const enCache = JSON.parse(localStorage.getItem("vigieBuildDefsCache"));
@@ -312,15 +317,36 @@
       // reconnaître les armures du coffre sans interroger chaque objet un par un.
       const cheminLite = chemins.DestinyInventoryItemLiteDefinition || chemins.DestinyInventoryItemDefinition;
       const objetsLite = await lireFichier(cheminLite);
+      const nomsEquipementFr = {};
+      try {
+        const nomsEnCache = JSON.parse(localStorage.getItem("vigieBuildNomsEquipementFrV1") || "null");
+        if (nomsEnCache && nomsEnCache.version === manifest.version && nomsEnCache.noms) {
+          Object.assign(nomsEquipementFr, nomsEnCache.noms);
+        }
+      } catch (_) {}
+      try {
+        const cacheCollection = JSON.parse(localStorage.getItem("vigieCollectionGodRollsV8") || "null");
+        const catalogue = cacheCollection && Array.isArray(cacheCollection.catalog) ? cacheCollection.catalog : [];
+        catalogue.forEach(function (arme) {
+          if (arme && arme.hash && arme.name && arme.nameEn && arme.name.trim() !== arme.nameEn.trim() && !nomsEquipementFr[arme.hash]) {
+            nomsEquipementFr[arme.hash] = arme.name.trim();
+          }
+        });
+      } catch (_) {}
       const hashesArmureReels = hashesArmure.filter(function (hash) {
         const definition = objetsLite[hash] || cache.objets[hash];
         const bucket = definition && definition.inventory && definition.inventory.bucketTypeHash;
         return Boolean(EMPLACEMENTS_ARMURE[bucket]);
       });
+      const hashesArmesReels = hashesArmure.filter(function (hash) {
+        const definition = objetsLite[hash] || cache.objets[hash];
+        const bucket = definition && definition.inventory && definition.inventory.bucketTypeHash;
+        return Boolean(BUCKETS_ARMES[bucket]);
+      });
       const objets = Object.assign({}, cache.objets);
       // Les définitions sont mises en cache en version compacte. Une ancienne entrée
       // sans marqueur est rechargée une fois pour récupérer les prises utiles aux mods.
-      const hashesArmureManquants = hashesArmureReels.filter(function (hash) { return !objets[hash] || !objets[hash]._vigieSocketsCached; });
+      const hashesArmureManquants = hashesArmureReels.filter(function (hash) { return !objets[hash] || !objets[hash]._vigieSocketsCachedFr; });
       let prochain = 0;
       let charges = 0;
       const nombreWorkers = Math.min(4, hashesArmureManquants.length);
@@ -329,13 +355,37 @@
           const index = prochain++;
           if (index >= hashesArmureManquants.length) return;
           const hash = hashesArmureManquants[index];
-          objets[hash] = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/");
+          objets[hash] = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/?lc=fr");
           charges++;
           if (progression) progression("armures", charges, hashesArmureManquants.length);
           if (charges < hashesArmureManquants.length) await new Promise(function (resolve) { setTimeout(resolve, 100); });
         }
       }
       await Promise.all(Array.from({ length: nombreWorkers }, chargerUnWorker));
+      hashesArmureReels.forEach(function (hash) {
+        const nom = objets[hash] && objets[hash].displayProperties && objets[hash].displayProperties.name;
+        if (nom) nomsEquipementFr[hash] = nom;
+      });
+
+      const hashesNomsArmesManquants = hashesArmesReels.filter(function (hash) { return !nomsEquipementFr[hash]; });
+      let prochainNom = 0;
+      let nomsCharges = 0;
+      async function chargerNomsArmesWorker() {
+        while (true) {
+          const index = prochainNom++;
+          if (index >= hashesNomsArmesManquants.length) return;
+          const hash = hashesNomsArmesManquants[index];
+          try {
+            const definition = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/?lc=fr");
+            const nom = definition && definition.displayProperties && definition.displayProperties.name;
+            if (nom && nom.trim()) nomsEquipementFr[hash] = nom.trim();
+          } catch (_) {}
+          nomsCharges++;
+          if (progression) progression("noms", nomsCharges, hashesNomsArmesManquants.length);
+          if (nomsCharges < hashesNomsArmesManquants.length) await new Promise(function (resolve) { setTimeout(resolve, 100); });
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(3, hashesNomsArmesManquants.length) }, chargerNomsArmesWorker));
 
       async function chargerDefinitionsCiblees(type, hashes, cible, phase) {
         let prochainHash = 0;
@@ -346,7 +396,8 @@
             const index = prochainHash++;
             if (index >= hashes.length) return;
             const hash = hashes[index];
-            cible[hash] = await appelerBungie("/Destiny2/Manifest/" + type + "/" + hash + "/");
+            cible[hash] = await appelerBungie("/Destiny2/Manifest/" + type + "/" + hash + "/?lc=fr");
+            if (cible[hash] && typeof cible[hash] === "object") cible[hash]._vigieLocale = LANGUE;
             chargesHash++;
             if (progression) progression(phase, chargesHash, hashes.length);
             if (chargesHash < hashes.length) await new Promise(function (resolve) { setTimeout(resolve, 100); });
@@ -360,14 +411,14 @@
         const definition = objets[hash];
         return Number(definition.equippingBlock && definition.equippingBlock.equipableItemSetHash) || 0;
       }).filter(Boolean)));
-      const hashesSetsManquants = hashesSets.filter(function (hash) { return !sets[hash]; });
+      const hashesSetsManquants = hashesSets.filter(function (hash) { return !sets[hash] || sets[hash]._vigieLocale !== LANGUE; });
       await chargerDefinitionsCiblees("DestinyEquipableItemSetDefinition", hashesSetsManquants, sets, "sets");
 
       const perks = Object.assign({}, cache.perks);
       const hashesPerks = Array.from(new Set(hashesSets.flatMap(function (hash) {
         return (sets[hash] && sets[hash].setPerks || []).map(function (perk) { return Number(perk.sandboxPerkHash); }).filter(Boolean);
       })));
-      const hashesPerksManquants = hashesPerks.filter(function (hash) { return !perks[hash]; });
+      const hashesPerksManquants = hashesPerks.filter(function (hash) { return !perks[hash] || perks[hash]._vigieLocale !== LANGUE; });
       await chargerDefinitionsCiblees("DestinySandboxPerkDefinition", hashesPerksManquants, perks, "perks");
 
       const objetsEnCache = {};
@@ -398,7 +449,8 @@
               };
             })
           },
-          _vigieSocketsCached: true
+          _vigieSocketsCached: true,
+          _vigieSocketsCachedFr: true
         };
       });
       hashesSets.forEach(function (hash) { if (sets[hash]) setsEnCache[hash] = sets[hash]; });
@@ -411,8 +463,12 @@
           perks: perksEnCache,
           stats: stats
         }));
+        localStorage.setItem("vigieBuildNomsEquipementFrV1", JSON.stringify({
+          version: manifest.version,
+          noms: nomsEquipementFr
+        }));
       } catch (_) {}
-      return { objets: objets, objetsLite: objetsLite, stats: stats, sets: sets, perks: perks, nombreArmures: hashesArmureReels.length };
+      return { objets: objets, objetsLite: objetsLite, stats: stats, sets: sets, perks: perks, nomsEquipementFr: nomsEquipementFr, nombreArmures: hashesArmureReels.length };
     }
 
     function plugsPourSocket(socket, hashSet) {
@@ -438,7 +494,7 @@
       async function worker() {
         while (prochain < manquants.length) {
           const hash = manquants[prochain++];
-          try { definitionMods[hash] = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/"); }
+          try { definitionMods[hash] = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/?lc=fr"); }
           catch (_) { definitionMods[hash] = null; }
         }
       }
@@ -520,6 +576,20 @@
       return { plan: plan, bonus: bonus };
     }
 
+    function scoreStatsBuild(totaux, poids, minimums) {
+      let progressionMinimums = 0;
+      let scorePriorites = 0;
+      for (let k = 0; k < STATS_ARMURE.length; k++) {
+        const minimum = Math.min(Math.max(0, Number(minimums[k]) || 0), MAX_STAT);
+        progressionMinimums += Math.min(Math.max(0, totaux[k]), minimum);
+        scorePriorites += Math.min(Math.max(0, totaux[k]), MAX_STAT) * poids[k];
+      }
+      if (minimums.some(function (minimum) { return minimum > 0; })) {
+        return progressionMinimums + scorePriorites / (MAX_STAT * 10 * STATS_ARMURE.length + 1);
+      }
+      return scorePriorites;
+    }
+
     function optimiserModsBuild(choix, poids, minimums) {
       const nombresPieces = choix.length;
       const bases = choix.map(function (c) {
@@ -550,13 +620,17 @@
       }
 
       function scoreStats(totaux) {
-        return totaux.reduce(function (score, value, k) {
-          return score + Math.min(value, MAX_STAT) * poids[k];
-        }, 0);
-      }
-
-      function satisfait(totaux) {
-        return minimums.every(function (minimum, k) { return totaux[k] >= minimum; });
+        let progressionMinimums = 0;
+        let scorePriorites = 0;
+        for (let k = 0; k < STATS_ARMURE.length; k++) {
+          const minimum = Math.min(Math.max(0, Number(minimums[k]) || 0), MAX_STAT);
+          progressionMinimums += Math.min(Math.max(0, totaux[k]), minimum);
+          scorePriorites += Math.min(Math.max(0, totaux[k]), MAX_STAT) * poids[k];
+        }
+        if (minimums.some(function (minimum) { return minimum > 0; })) {
+          return progressionMinimums + scorePriorites / (MAX_STAT * 10 * STATS_ARMURE.length + 1);
+        }
+        return scorePriorites;
       }
 
       function totauxDuPlan(plans) {
@@ -575,11 +649,9 @@
       let meilleursPlans = null;
       const planInitial = choix.map(function (c) { return (c.modPlan || []).map(function (mod) { return Object.assign({}, mod); }); });
       const totauxInitiaux = totauxDuPlan(planInitial);
-      if (satisfait(totauxInitiaux)) {
-        meilleurScore = scoreStats(totauxInitiaux);
-        meilleursTotaux = totauxInitiaux;
-        meilleursPlans = planInitial;
-      }
+      meilleurScore = scoreStats(totauxInitiaux);
+      meilleursTotaux = totauxInitiaux;
+      meilleursPlans = planInitial;
 
       const plansCourants = Array.from({ length: nombresPieces }, function () { return []; });
       const energies = new Array(nombresPieces).fill(0);
@@ -588,18 +660,11 @@
       function explorerMods(index, totaux) {
         if (++essais > LIMITE_MODS) return;
         const maximum = maximumRestant[index];
-        for (let k = 0; k < STATS_ARMURE.length; k++) {
-          if (totaux[k] + maximum[k] < minimums[k]) return;
-        }
         if (meilleursTotaux) {
-          let scoreMaximum = 0;
-          for (let k = 0; k < STATS_ARMURE.length; k++) {
-            scoreMaximum += Math.min(totaux[k] + maximum[k], MAX_STAT) * poids[k];
-          }
+          const scoreMaximum = scoreStats(totaux.map(function (value, k) { return value + maximum[k]; }));
           if (scoreMaximum <= meilleurScore) return;
         }
         if (index >= sockets.length) {
-          if (!satisfait(totaux)) return;
           const score = scoreStats(totaux);
           if (score > meilleurScore) {
             meilleurScore = score;
@@ -1571,12 +1636,9 @@
             return (a.stats && a.stats[hash]) || 0;
           });
           const catalogueMods = catalogueModsPiece(a);
-          const mods = meilleurPlanMods(a, poids, minimums, catalogueMods);
+              const mods = meilleurPlanMods(a, poids, minimums, catalogueMods);
           const v = base.map(function (value, k) { return value + mods.bonus[k]; });
-          let score = 0;
-          for (let k = 0; k < nbStats; k++) {
-            score += v[k] * poids[k];
-          }
+          const score = scoreStatsBuild(v, poids, minimums);
           return { piece: a, v: v, score: score, modPlan: mods.plan, catalogueMods: catalogueMods };
         });
 
@@ -1625,11 +1687,7 @@
       let interrompu = false;
 
       function scoreReel(totaux) {
-        let s = 0;
-        for (let k = 0; k < nbStats; k++) {
-          s += Math.min(totaux[k], MAX_STAT) * poids[k];
-        }
-        return s;
+        return scoreStatsBuild(totaux, poids, minimums);
       }
 
       function inserer(score, choixCopie, totauxCopie) {
@@ -1646,16 +1704,17 @@
         if (i === N) {
           if (exotique !== "peu" && exotique !== "aucune" && nbExotiques !== 1) { return; }
           if (bonusChoisi && nbPiecesBonus < bonusChoisi.requiredCount) { return; }
-          for (let k = 0; k < nbStats; k++) {
-            if (totaux[k] < minimums[k]) { return; }
-          }
           inserer(scoreReel(totaux), choix.slice(), totaux.slice());
           return;
         }
 
-        // Peut-on encore atteindre les minimums ?
-        for (let k = 0; k < nbStats; k++) {
-          if (totaux[k] + resteStats[i][k] < minimums[k]) { return; }
+        // Si cinq builds atteignent déjà tous les minimums, écarter les branches qui ne le peuvent plus.
+        if (meilleurs.length === TOP && meilleurs.every(function (resultat) {
+          return minimums.every(function (minimum, k) { return minimum === 0 || resultat.totaux[k] >= minimum; });
+        })) {
+          for (let k = 0; k < nbStats; k++) {
+            if (totaux[k] + resteStats[i][k] < minimums[k]) return;
+          }
         }
         if (bonusChoisi && nbPiecesBonus + restePiecesBonus[i] < bonusChoisi.requiredCount) { return; }
         // Peut-on encore battre le moins bon des meilleurs résultats ?
@@ -1687,12 +1746,12 @@
         }
       }
       meilleurs.sort(function (a, b) { return b.score - a.score; });
-      afficherResultats(meilleurs, interrompu, bonusChoisi, contexte);
+      afficherResultats(meilleurs, interrompu, bonusChoisi, contexte, minimums);
     }
 
     // ---------- L'affichage des résultats ----------
 
-    function afficherResultats(meilleurs, interrompu, bonusChoisi, contexte) {
+    function afficherResultats(meilleurs, interrompu, bonusChoisi, contexte, minimums) {
       if (meilleurs.length === 0) {
         message.textContent = interrompu
           ? "Recherche interrompue : trop de combinaisons. Ajoute des minimums pour la réduire."
@@ -1821,6 +1880,25 @@
           grilleStats.appendChild(cellule);
         });
         blocStats.appendChild(grilleStats);
+        const objectifsDemandes = minimums.map(function (minimum, k) {
+          return minimum > 0 ? { index: k, minimum: minimum, valeur: Number(totaux[k]) || 0 } : null;
+        }).filter(Boolean);
+        if (objectifsDemandes.length) {
+          const objectifsManques = objectifsDemandes.filter(function (objectif) { return objectif.valeur < objectif.minimum; });
+          const resumeObjectifs = document.createElement("p");
+          resumeObjectifs.className = "stats";
+          if (!objectifsManques.length) {
+            resumeObjectifs.textContent = "Tous les minimums demandés sont atteints avec les mods sélectionnés.";
+          } else {
+            const nomsStatsSecours = ["Mobilité", "Résistance", "Récupération", "Discipline", "Intellect", "Force"];
+            resumeObjectifs.textContent = "Meilleur résultat disponible ; minimums non atteints : " + objectifsManques.map(function (objectif) {
+              const definition = definitionsStats[STATS_ARMURE[objectif.index]];
+              const nom = definition && definition.displayProperties && definition.displayProperties.name || nomsStatsSecours[objectif.index];
+              return nom + " " + objectif.valeur + " / " + objectif.minimum;
+            }).join(" · ") + ".";
+          }
+          blocStats.appendChild(resumeObjectifs);
+        }
         if (depasse) {
           const note = document.createElement("p");
           note.className = "stats";
@@ -1948,6 +2026,7 @@
         statut.textContent = "Analyse des objets du coffre et des armures des personnages…";
         const definitions = await chargerDefinitions(hashesArmure, function (phase, charge, total) {
           if (phase === "armures") statut.textContent = "Analyse des pièces d’armure : " + charge + " / " + total + "…";
+          else if (phase === "noms") statut.textContent = "Noms français officiels des armes : " + charge + " / " + total + "…";
           else if (phase === "sets") statut.textContent = "Lecture des bonus d’armure : " + charge + " / " + total + " sets…";
           else statut.textContent = "Chargement des descriptions de bonus : " + charge + " / " + total + "…";
         });
@@ -1970,7 +2049,8 @@
                 ? "Équipée" + (classeSource ? " sur " + classeSource : "")
                 : "Inventaire" + (classeSource ? " de " + classeSource : "");
             toutesLesArmes.push({
-              nom: definition.displayProperties && definition.displayProperties.name || "Arme inconnue",
+              nom: definitions.nomsEquipementFr[element.objet.itemHash] ||
+                (definition.displayProperties && definition.displayProperties.name) || "Arme inconnue",
               icone: definition.displayProperties && definition.displayProperties.icon || "",
               hash: Number(element.objet.itemHash),
               idInstance: element.objet.itemInstanceId,
@@ -1992,7 +2072,9 @@
           const stats = lireStats(statsObjets, element.objet.itemInstanceId);
 
           toutesLesArmures.push({
-            nom: definitionLite && definitionLite.displayProperties && definitionLite.displayProperties.name || definition.displayProperties.name,
+            nom: definitions.nomsEquipementFr[element.objet.itemHash] ||
+              (definitionLite && definitionLite.displayProperties && definitionLite.displayProperties.name) ||
+              (definition.displayProperties && definition.displayProperties.name) || "Armure inconnue",
             icone: definition.displayProperties.icon,
             emplacement: emplacement,
             classe: definition.classType,
