@@ -421,6 +421,12 @@
         const bucket = definition && definition.inventory && definition.inventory.bucketTypeHash;
         return Boolean(BUCKETS_ARMES[bucket]);
       });
+      // Le manifeste français contient déjà les noms des armes : évite une requête Bungie par arme.
+      hashesArmesReels.forEach(function (hash) {
+        if (nomsEquipementFr[hash]) return;
+        const nomLite = objetsLite[hash] && objetsLite[hash].displayProperties && objetsLite[hash].displayProperties.name;
+        if (nomLite && nomLite.trim()) nomsEquipementFr[hash] = nomLite.trim();
+      });
       const objets = Object.assign({}, cache.objets);
       // Les définitions en cache doivent conserver les prises normales et aléatoires.
       // V2 force le renouvellement des entrées compactées par l'ancien format.
@@ -436,7 +442,6 @@
           objets[hash] = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/?lc=fr");
           charges++;
           if (progression) progression("armures", charges, hashesArmureManquants.length);
-          if (charges < hashesArmureManquants.length) await new Promise(function (resolve) { setTimeout(resolve, 100); });
         }
       }
       await Promise.all(Array.from({ length: nombreWorkers }, chargerUnWorker));
@@ -460,7 +465,6 @@
           } catch (_) {}
           nomsCharges++;
           if (progression) progression("noms", nomsCharges, hashesNomsArmesManquants.length);
-          if (nomsCharges < hashesNomsArmesManquants.length) await new Promise(function (resolve) { setTimeout(resolve, 100); });
         }
       }
       await Promise.all(Array.from({ length: Math.min(3, hashesNomsArmesManquants.length) }, chargerNomsArmesWorker));
@@ -478,7 +482,6 @@
             if (cible[hash] && typeof cible[hash] === "object") cible[hash]._vigieLocale = LANGUE;
             chargesHash++;
             if (progression) progression(phase, chargesHash, hashes.length);
-            if (chargesHash < hashes.length) await new Promise(function (resolve) { setTimeout(resolve, 100); });
           }
         }
         await Promise.all(Array.from({ length: nombre }, chargerWorker));
@@ -1686,7 +1689,7 @@
       if (!composantsModsCharges) {
         message.textContent = "Chargement des sockets et des mods de ton inventaire…";
         const profilMods = await appelerBungie(
-          "/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=102,200,201,205,300,304,305,310"
+          "/Destiny2/" + compteActif.membershipType + "/Profile/" + compteActif.membershipId + "/?components=102,200,201,205,300,305,310"
         );
         profilePlugSets = (profilMods.profilePlugSets && profilMods.profilePlugSets.data && profilMods.profilePlugSets.data.plugs) || {};
         characterPlugSets = {};
@@ -1740,7 +1743,7 @@
 
       const hashesMods = [];
       let nombreSocketsAnalysees = 0;
-      for (const piece of toutesLesArmures) {
+      for (const piece of piecesPourMods) {
         const socketData = socketParInstance[piece.idInstance] || {};
         const sockets = socketData.sockets || [];
         nombreSocketsAnalysees += sockets.length;
@@ -1763,7 +1766,7 @@
       await chargerDefinitionsMods(hashesModsUniques);
       const cataloguesMods = {};
       let nombreModsStatDisponibles = 0;
-      for (const piece of toutesLesArmures) {
+      for (const piece of piecesPourMods) {
         const catalogue = catalogueModsPiece(piece);
         cataloguesMods[piece.idInstance] = catalogue;
         catalogue.sockets.forEach(function (socket) { nombreModsStatDisponibles += socket.options.length; });
