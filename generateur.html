@@ -273,6 +273,7 @@
     let definitionMods = {};
     let characterPlugSets = {};
     let profilePlugSets = {};
+    let versionManifestActif = "";
     let compteActif = null;
     let composantsModsCharges = false;
     let composantsDoctrineCharges = false;
@@ -298,6 +299,7 @@
         return normalisee === "fr" || normalisee.indexOf("fr-") === 0;
       });
       const chemins = cheminsParLangue[LANGUE] || (localeFr && cheminsParLangue[localeFr]) || {};
+      versionManifestActif = manifest.version;
       let cache = { version: manifest.version, objets: {}, sets: {}, perks: {}, stats: null };
       try {
         const enCache = JSON.parse(localStorage.getItem("vigieBuildDefsCache"));
@@ -314,11 +316,85 @@
       }
 
       const stats = cache.stats || await lireFichier(chemins.DestinyStatDefinition);
-      // Le coffre regroupe plusieurs buckets de profil : bucketHash n'est pas
-      // toujours l'emplacement normal de l'objet. Le manifeste Lite permet de
-      // reconnaître les armures du coffre sans interroger chaque objet un par un.
       const cheminLite = chemins.DestinyInventoryItemLiteDefinition || chemins.DestinyInventoryItemDefinition;
-      const objetsLite = await lireFichier(cheminLite);
+      function compacterDefinitionLite(definition) {
+        if (!definition) return null;
+        const display = definition.displayProperties || {};
+        const inventory = definition.inventory || {};
+        return {
+          displayProperties: {
+            name: display.name || "",
+            icon: display.icon || "",
+            description: display.description || ""
+          },
+          itemType: definition.itemType,
+          classType: definition.classType,
+          inventory: {
+            bucketTypeHash: inventory.bucketTypeHash,
+            tierType: inventory.tierType
+          }
+        };
+      }
+      function estDefinitionDoctrine(definition) {
+        return Number(definition && definition.itemType) === 16 ||
+          Number(definition && definition.inventory && definition.inventory.bucketTypeHash) === BUCKET_DOCTRINE;
+      }
+      let cacheLite = { version: manifest.version, checked: {}, items: {}, doctrines: {}, doctrineReady: false };
+      try {
+        const cacheLiteSauve = JSON.parse(localStorage.getItem("vigieBuildLiteCacheV1") || "null");
+        if (cacheLiteSauve && cacheLiteSauve.version === manifest.version) cacheLite = cacheLiteSauve;
+      } catch (_) {}
+      cacheLite.checked = cacheLite.checked || {};
+      cacheLite.items = cacheLite.items || {};
+      cacheLite.doctrines = cacheLite.doctrines || {};
+      const objetsLite = {};
+      if (!cacheLite.doctrineReady) {
+        // Le fichier complet n'est téléchargé qu'une fois par version du manifeste.
+        const objetsLiteComplets = await lireFichier(cheminLite);
+        for (const hash of hashesArmure) {
+          const definition = objetsLiteComplets[hash];
+          cacheLite.checked[hash] = true;
+          if (definition) cacheLite.items[hash] = compacterDefinitionLite(definition);
+        }
+        for (const hash in objetsLiteComplets) {
+          const definition = objetsLiteComplets[hash];
+          if (estDefinitionDoctrine(definition)) cacheLite.doctrines[hash] = compacterDefinitionLite(definition);
+        }
+        cacheLite.doctrineReady = true;
+      } else {
+        const hashesLiteManquants = hashesArmure.filter(function (hash) {
+          return !cacheLite.checked[hash] && !cache.objets[hash];
+        });
+        let prochainLite = 0;
+        async function chargerLiteWorker() {
+          while (prochainLite < hashesLiteManquants.length) {
+            const hash = hashesLiteManquants[prochainLite++];
+            try {
+              const definition = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/?lc=fr");
+              if (definition) {
+                cacheLite.items[hash] = compacterDefinitionLite(definition);
+                if (estDefinitionDoctrine(definition)) cacheLite.doctrines[hash] = compacterDefinitionLite(definition);
+              }
+            } catch (_) {}
+            cacheLite.checked[hash] = true;
+          }
+        }
+        await Promise.all(Array.from({ length: Math.min(6, hashesLiteManquants.length) }, chargerLiteWorker));
+      }
+      Object.assign(objetsLite, cacheLite.doctrines, cacheLite.items);
+      try {
+        localStorage.setItem("vigieBuildLiteCacheV1", JSON.stringify(cacheLite));
+      } catch (_) {}
+      try {
+        const plugCacheSauve = JSON.parse(localStorage.getItem("vigieBuildPlugSetsCacheV1") || "null");
+        if (plugCacheSauve && plugCacheSauve.version === manifest.version && plugCacheSauve.sets) {
+          definitionsPlugSetsDoctrine = Object.assign({}, plugCacheSauve.sets);
+        } else {
+          definitionsPlugSetsDoctrine = {};
+        }
+      } catch (_) {
+        definitionsPlugSetsDoctrine = {};
+      }
       const nomsEquipementFr = {};
       try {
         const nomsEnCache = JSON.parse(localStorage.getItem("vigieBuildNomsEquipementFrV1") || "null");
@@ -1627,8 +1703,16 @@
         afficherDoctrine();
       }
 
+      const inclureCoffreMods = document.getElementById("inclureCoffre").checked;
+      const piecesPourMods = toutesLesArmures.filter(function (piece) {
+        if (piece.classe !== classe || ORDRE.indexOf(piece.emplacement) === -1) return false;
+        if (!inclureCoffreMods && piece.lieu === "Coffre") return false;
+        if (exotique === "aucune") return !piece.exotique;
+        if (exotique !== "peu") return !piece.exotique || piece.nom === exotique;
+        return true;
+      });
       const hashesEnsemblesMods = [];
-      for (const piece of toutesLesArmures) {
+      for (const piece of piecesPourMods) {
         const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
         for (const entree of entrees) {
           if (entree.reusablePlugSetHash) hashesEnsemblesMods.push(Number(entree.reusablePlugSetHash));
@@ -1645,7 +1729,13 @@
       }
       if (ensemblesModsUniques.length) {
         message.textContent = "Lecture des ensembles de mods Bungie…";
-        await Promise.all(Array.from({ length: Math.min(4, ensemblesModsUniques.length) }, chargerEnsemblesModsWorker));
+        await Promise.all(Array.from({ length: Math.min(8, ensemblesModsUniques.length) }, chargerEnsemblesModsWorker));
+        try {
+          localStorage.setItem("vigieBuildPlugSetsCacheV1", JSON.stringify({
+            version: versionManifestActif,
+            sets: definitionsPlugSetsDoctrine
+          }));
+        } catch (_) {}
       }
 
       const hashesMods = [];
