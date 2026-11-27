@@ -1729,46 +1729,42 @@
     }
 
     async function trouverSocketsDeStatistiques(pieces) {
-      async function calculerIndices() {
+      await chargerPlugsInitiauxArmures(pieces);
+      function hashesInitiaux() {
+        return Array.from(new Set(pieces.flatMap(function (piece) {
+          return (piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [])
+            .map(function (entree) { return Number(entree && entree.singleInitialItemHash) || 0; })
+            .filter(Boolean);
+        })));
+      }
+      function calculerIndices() {
         const indexParInstance = {};
         for (const piece of pieces) {
           const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
           const sockets = socketParInstance[piece.idInstance] && socketParInstance[piece.idInstance].sockets || [];
           indexParInstance[piece.idInstance] = entrees.reduce(function (indices, entree, index) {
             const socket = sockets[index] || {};
-            const plugCourant = definitionMods[Number(socket.plugHash)] || definitionMods[Number(entree.singleInitialItemHash)];
-            if (estSocketDeStatistiques(plugCourant)) indices.push(index);
+            const plugInitial = definitionMods[Number(entree.singleInitialItemHash)];
+            const plugCourant = definitionMods[Number(socket.plugHash)];
+            if (estSocketDeStatistiques(plugInitial) || estSocketDeStatistiques(plugCourant)) indices.push(index);
             return indices;
           }, []);
         }
         return indexParInstance;
       }
 
-      const hashesPlugs = [];
-      for (const piece of pieces) {
-        const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
-        const sockets = socketParInstance[piece.idInstance] && socketParInstance[piece.idInstance].sockets || [];
-        for (let i = 0; i < entrees.length; i++) {
-          const hashActuel = Number(sockets[i] && sockets[i].plugHash) || 0;
-          const hashInitial = Number(entrees[i].singleInitialItemHash) || 0;
-          if (hashActuel) hashesPlugs.push(hashActuel);
-          if (hashInitial) hashesPlugs.push(hashInitial);
-        }
-      }
-      await chargerDefinitionsMods(Array.from(new Set(hashesPlugs)));
-      let indexParInstance = await calculerIndices();
+      await chargerDefinitionsMods(hashesInitiaux());
+      let indexParInstance = calculerIndices();
       const nombrePrisesTrouvees = Object.keys(indexParInstance).reduce(function (total, id) {
         return total + indexParInstance[id].length;
       }, 0);
       if (nombrePrisesTrouvees === 0) {
-        await chargerPlugsInitiauxArmures(pieces);
-        const hashesInitiaux = pieces.flatMap(function (piece) {
-          return (piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [])
-            .map(function (entree) { return Number(entree && entree.singleInitialItemHash) || 0; })
-            .filter(Boolean);
-        });
-        await chargerDefinitionsMods(Array.from(new Set(hashesInitiaux)));
-        indexParInstance = await calculerIndices();
+        const hashesCourants = Array.from(new Set(pieces.flatMap(function (piece) {
+          const sockets = socketParInstance[piece.idInstance] && socketParInstance[piece.idInstance].sockets || [];
+          return sockets.map(function (socket) { return Number(socket && socket.plugHash) || 0; }).filter(Boolean);
+        })));
+        await chargerDefinitionsMods(hashesCourants);
+        indexParInstance = calculerIndices();
       }
       return indexParInstance;
     }
