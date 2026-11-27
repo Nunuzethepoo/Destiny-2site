@@ -428,9 +428,8 @@
         if (nomLite && nomLite.trim()) nomsEquipementFr[hash] = nomLite.trim();
       });
       const objets = Object.assign({}, cache.objets);
-      // Les définitions en cache doivent conserver les prises normales et aléatoires.
-      // V2 force le renouvellement des entrées compactées par l'ancien format.
-      const hashesArmureManquants = hashesArmureReels.filter(function (hash) { return !objets[hash] || !objets[hash]._vigieSocketsCachedFrV2; });
+      // V3 conserve aussi le plug initial, nécessaire pour reconnaître les prises de réglage.
+      const hashesArmureManquants = hashesArmureReels.filter(function (hash) { return !objets[hash] || !objets[hash]._vigieSocketsCachedFrV3; });
       let prochain = 0;
       let charges = 0;
       const nombreWorkers = Math.min(4, hashesArmureManquants.length);
@@ -527,6 +526,8 @@
               return {
                 reusablePlugSetHash: entree.reusablePlugSetHash || 0,
                 randomizedPlugSetHash: entree.randomizedPlugSetHash || 0,
+                singleInitialItemHash: entree.singleInitialItemHash || 0,
+                socketTypeHash: entree.socketTypeHash || 0,
                 plugSources: entree.plugSources || 0,
                 reusablePlugItems: (entree.reusablePlugItems || []).map(function (plug) { return { plugItemHash: plug.plugItemHash }; })
               };
@@ -534,7 +535,8 @@
           },
           _vigieSocketsCached: true,
           _vigieSocketsCachedFr: true,
-          _vigieSocketsCachedFrV2: true
+          _vigieSocketsCachedFrV2: true,
+          _vigieSocketsCachedFrV3: true
         };
       });
       hashesSets.forEach(function (hash) { if (sets[hash]) setsEnCache[hash] = sets[hash]; });
@@ -590,9 +592,7 @@
           Object.assign(definitionMods, cacheMods.mods);
         }
       } catch (_) {}
-      const manquants = hashes.filter(function (hash) {
-        return !Object.prototype.hasOwnProperty.call(definitionMods, hash);
-      });
+      const manquants = hashes.filter(function (hash) { return !definitionMods[hash]; });
       let prochain = 0;
       async function worker() {
         while (prochain < manquants.length) {
@@ -1676,27 +1676,37 @@
       });
     }
 
-    function estSocketDeStatistiques(plugCourant) {
-      if (!plugCourant || !plugCourant.plug) return false;
-      const identifiant = String(plugCourant.plug.plugCategoryIdentifier || "");
-      const nom = String(plugCourant.displayProperties && plugCourant.displayProperties.name || "");
-      return /armor_tiering.*(?:tuning|stat)|(?:armor|armure).*?(?:stat|tuning)|(?:stat|tuning).*?(?:armor|armure)|v\\d+\\.plugs\\.armor\\.stat/i.test(identifiant + " " + nom);
+    function estSocketDeStatistiques(plug) {
+      if (!plug) return false;
+      const identifiant = String(plug.plug && plug.plug.plugCategoryIdentifier || "");
+      const nom = String(plug.displayProperties && plug.displayProperties.name || "");
+      const signature = identifiant + " " + nom;
+      return /armor_tiering.*(?:tuning|stat)|(?:armor|armure).*?(?:stat|tuning)|(?:stat|tuning).*?(?:armor|armure)|v\d+\.plugs\.armor\.stat/i.test(signature) ||
+        (/(?:tuning|r[eé]glage)/i.test(nom) && /(?:socket|prise|mod)/i.test(nom));
     }
 
     async function trouverSocketsDeStatistiques(pieces) {
-      const hashesPlugsCourants = Array.from(new Set(pieces.flatMap(function (piece) {
+      const hashesPlugs = [];
+      for (const piece of pieces) {
+        const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
         const sockets = socketParInstance[piece.idInstance] && socketParInstance[piece.idInstance].sockets || [];
-        return sockets.map(function (socket) { return Number(socket && socket.plugHash) || 0; }).filter(Boolean);
-      })));
-      await chargerDefinitionsMods(hashesPlugsCourants);
+        for (let i = 0; i < entrees.length; i++) {
+          const hashActuel = Number(sockets[i] && sockets[i].plugHash) || 0;
+          const hashInitial = Number(entrees[i].singleInitialItemHash) || 0;
+          if (hashActuel) hashesPlugs.push(hashActuel);
+          if (hashInitial) hashesPlugs.push(hashInitial);
+        }
+      }
+      await chargerDefinitionsMods(Array.from(new Set(hashesPlugs)));
 
       const indexParInstance = {};
       for (const piece of pieces) {
         const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
         const sockets = socketParInstance[piece.idInstance] && socketParInstance[piece.idInstance].sockets || [];
-        indexParInstance[piece.idInstance] = sockets.reduce(function (indices, socket, index) {
-          const plugCourant = socket && definitionMods[Number(socket.plugHash)];
-          if (entrees[index] && estSocketDeStatistiques(plugCourant)) indices.push(index);
+        indexParInstance[piece.idInstance] = entrees.reduce(function (indices, entree, index) {
+          const socket = sockets[index] || {};
+          const plugCourant = definitionMods[Number(socket.plugHash)] || definitionMods[Number(entree.singleInitialItemHash)];
+          if (estSocketDeStatistiques(plugCourant)) indices.push(index);
           return indices;
         }, []);
       }
