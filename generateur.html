@@ -428,8 +428,8 @@
         if (nomLite && nomLite.trim()) nomsEquipementFr[hash] = nomLite.trim();
       });
       const objets = Object.assign({}, cache.objets);
-      // V3 conserve aussi le plug initial, nécessaire pour reconnaître les prises de réglage.
-      const hashesArmureManquants = hashesArmureReels.filter(function (hash) { return !objets[hash] || !objets[hash]._vigieSocketsCachedFrV3; });
+      // Les plugs initiaux sont récupérés à la demande, sans ralentir le chargement de l'inventaire.
+      const hashesArmureManquants = hashesArmureReels.filter(function (hash) { return !objets[hash] || !objets[hash]._vigieSocketsCachedFrV2; });
       let prochain = 0;
       let charges = 0;
       const nombreWorkers = Math.min(4, hashesArmureManquants.length);
@@ -535,8 +535,7 @@
           },
           _vigieSocketsCached: true,
           _vigieSocketsCachedFr: true,
-          _vigieSocketsCachedFrV2: true,
-          _vigieSocketsCachedFrV3: true
+          _vigieSocketsCachedFrV2: true
         };
       });
       hashesSets.forEach(function (hash) { if (sets[hash]) setsEnCache[hash] = sets[hash]; });
@@ -1685,7 +1684,66 @@
         (/(?:tuning|r[eé]glage)/i.test(nom) && /(?:socket|prise|mod)/i.test(nom));
     }
 
+    async function chargerPlugsInitiauxArmures(pieces) {
+      let cache = { version: versionManifestActif, items: {} };
+      try {
+        const sauvegarde = JSON.parse(localStorage.getItem("vigieBuildInitialPlugsCacheV1") || "null");
+        if (sauvegarde && sauvegarde.version === versionManifestActif && sauvegarde.items) cache = sauvegarde;
+      } catch (_) {}
+      const hashesACharger = Array.from(new Set(pieces.filter(function (piece) {
+        const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
+        return Number(piece.hash) && !Array.isArray(cache.items[piece.hash]) &&
+          entrees.some(function (entree) { return !Object.prototype.hasOwnProperty.call(entree, "singleInitialItemHash"); });
+      }).map(function (piece) { return Number(piece.hash); })));
+      let prochain = 0;
+      async function worker() {
+        while (prochain < hashesACharger.length) {
+          const hash = hashesACharger[prochain++];
+          try {
+            const definition = await appelerBungie("/Destiny2/Manifest/DestinyInventoryItemDefinition/" + hash + "/?lc=fr");
+            const entrees = definition && definition.sockets && definition.sockets.socketEntries || [];
+            cache.items[hash] = entrees.map(function (entree) { return Number(entree && entree.singleInitialItemHash) || 0; });
+          } catch (_) {}
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(4, hashesACharger.length) }, worker));
+      for (const piece of pieces) {
+        const hashesInitiaux = cache.items[Number(piece.hash)];
+        if (!Array.isArray(hashesInitiaux)) continue;
+        const definition = piece.definition || {};
+        const socketsDefinition = definition.sockets || {};
+        const entrees = socketsDefinition.socketEntries || [];
+        piece.definition = Object.assign({}, definition, {
+          sockets: Object.assign({}, socketsDefinition, {
+            socketEntries: entrees.map(function (entree, index) {
+              return Object.assign({}, entree, {
+                singleInitialItemHash: Number(hashesInitiaux[index]) || Number(entree.singleInitialItemHash) || 0
+              });
+            })
+          })
+        });
+      }
+      try {
+        localStorage.setItem("vigieBuildInitialPlugsCacheV1", JSON.stringify(cache));
+      } catch (_) {}
+    }
+
     async function trouverSocketsDeStatistiques(pieces) {
+      async function calculerIndices() {
+        const indexParInstance = {};
+        for (const piece of pieces) {
+          const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
+          const sockets = socketParInstance[piece.idInstance] && socketParInstance[piece.idInstance].sockets || [];
+          indexParInstance[piece.idInstance] = entrees.reduce(function (indices, entree, index) {
+            const socket = sockets[index] || {};
+            const plugCourant = definitionMods[Number(socket.plugHash)] || definitionMods[Number(entree.singleInitialItemHash)];
+            if (estSocketDeStatistiques(plugCourant)) indices.push(index);
+            return indices;
+          }, []);
+        }
+        return indexParInstance;
+      }
+
       const hashesPlugs = [];
       for (const piece of pieces) {
         const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
@@ -1698,17 +1756,19 @@
         }
       }
       await chargerDefinitionsMods(Array.from(new Set(hashesPlugs)));
-
-      const indexParInstance = {};
-      for (const piece of pieces) {
-        const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
-        const sockets = socketParInstance[piece.idInstance] && socketParInstance[piece.idInstance].sockets || [];
-        indexParInstance[piece.idInstance] = entrees.reduce(function (indices, entree, index) {
-          const socket = sockets[index] || {};
-          const plugCourant = definitionMods[Number(socket.plugHash)] || definitionMods[Number(entree.singleInitialItemHash)];
-          if (estSocketDeStatistiques(plugCourant)) indices.push(index);
-          return indices;
-        }, []);
+      let indexParInstance = await calculerIndices();
+      const nombrePrisesTrouvees = Object.keys(indexParInstance).reduce(function (total, id) {
+        return total + indexParInstance[id].length;
+      }, 0);
+      if (nombrePrisesTrouvees === 0) {
+        await chargerPlugsInitiauxArmures(pieces);
+        const hashesInitiaux = pieces.flatMap(function (piece) {
+          return (piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [])
+            .map(function (entree) { return Number(entree && entree.singleInitialItemHash) || 0; })
+            .filter(Boolean);
+        });
+        await chargerDefinitionsMods(Array.from(new Set(hashesInitiaux)));
+        indexParInstance = await calculerIndices();
       }
       return indexParInstance;
     }
