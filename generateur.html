@@ -590,7 +590,9 @@
           Object.assign(definitionMods, cacheMods.mods);
         }
       } catch (_) {}
-      const manquants = hashes.filter(function (hash) { return !definitionMods[hash]; });
+      const manquants = hashes.filter(function (hash) {
+        return !Object.prototype.hasOwnProperty.call(definitionMods, hash);
+      });
       let prochain = 0;
       async function worker() {
         while (prochain < manquants.length) {
@@ -1674,40 +1676,27 @@
       });
     }
 
-    function estSocketDeStatistiques(typeSocket) {
-      if (!typeSocket) return false;
-      const identifiants = (typeSocket.plugWhitelist || []).map(function (entree) {
-        return String(entree && entree.categoryIdentifier || "");
-      }).join(" ");
-      const libelle = typeSocket.displayProperties && typeSocket.displayProperties.name || "";
-      return /armor_tiering.*(?:tuning|stat)|(?:armor|armure).*?(?:stat|tuning)|(?:stat|tuning).*?(?:armor|armure)/i.test(identifiants + " " + libelle);
+    function estSocketDeStatistiques(plugCourant) {
+      if (!plugCourant || !plugCourant.plug) return false;
+      const identifiant = String(plugCourant.plug.plugCategoryIdentifier || "");
+      const nom = String(plugCourant.displayProperties && plugCourant.displayProperties.name || "");
+      return /armor_tiering.*(?:tuning|stat)|(?:armor|armure).*?(?:stat|tuning)|(?:stat|tuning).*?(?:armor|armure)|v\\d+\\.plugs\\.armor\\.stat/i.test(identifiant + " " + nom);
     }
 
     async function trouverSocketsDeStatistiques(pieces) {
-      const hashesTypes = Array.from(new Set(pieces.flatMap(function (piece) {
-        return (piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [])
-          .map(function (entree) { return Number(entree && entree.socketTypeHash) || 0; })
-          .filter(Boolean);
+      const hashesPlugsCourants = Array.from(new Set(pieces.flatMap(function (piece) {
+        const sockets = socketParInstance[piece.idInstance] && socketParInstance[piece.idInstance].sockets || [];
+        return sockets.map(function (socket) { return Number(socket && socket.plugHash) || 0; }).filter(Boolean);
       })));
-      try {
-        const cacheTypes = JSON.parse(localStorage.getItem("vigieBuildSocketTypesCacheV1") || "null");
-        if (cacheTypes && cacheTypes.version === versionManifestActif && cacheTypes.types) {
-          Object.assign(definitionsTypesSocket, cacheTypes.types);
-        }
-      } catch (_) {}
-      await Promise.all(hashesTypes.map(definitionSocketType));
-      try {
-        localStorage.setItem("vigieBuildSocketTypesCacheV1", JSON.stringify({
-          version: versionManifestActif,
-          types: definitionsTypesSocket
-        }));
-      } catch (_) {}
+      await chargerDefinitionsMods(hashesPlugsCourants);
+
       const indexParInstance = {};
       for (const piece of pieces) {
         const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
-        indexParInstance[piece.idInstance] = entrees.reduce(function (indices, entree, index) {
-          const typeSocket = entree && definitionsTypesSocket[Number(entree.socketTypeHash)];
-          if (estSocketDeStatistiques(typeSocket)) indices.push(index);
+        const sockets = socketParInstance[piece.idInstance] && socketParInstance[piece.idInstance].sockets || [];
+        indexParInstance[piece.idInstance] = sockets.reduce(function (indices, socket, index) {
+          const plugCourant = socket && definitionMods[Number(socket.plugHash)];
+          if (entrees[index] && estSocketDeStatistiques(plugCourant)) indices.push(index);
           return indices;
         }, []);
       }
