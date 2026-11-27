@@ -584,6 +584,12 @@
     }
 
     async function chargerDefinitionsMods(hashes) {
+      try {
+        const cacheMods = JSON.parse(localStorage.getItem("vigieBuildModsCacheV1") || "null");
+        if (cacheMods && cacheMods.version === versionManifestActif && cacheMods.mods) {
+          Object.assign(definitionMods, cacheMods.mods);
+        }
+      } catch (_) {}
       const manquants = hashes.filter(function (hash) { return !definitionMods[hash]; });
       let prochain = 0;
       async function worker() {
@@ -594,6 +600,12 @@
         }
       }
       await Promise.all(Array.from({ length: Math.min(4, manquants.length) }, worker));
+      try {
+        localStorage.setItem("vigieBuildModsCacheV1", JSON.stringify({
+          version: versionManifestActif,
+          mods: definitionMods
+        }));
+      } catch (_) {}
     }
 
     function statsDuMod(hash) {
@@ -1668,7 +1680,7 @@
         return String(entree && entree.categoryIdentifier || "");
       }).join(" ");
       const libelle = typeSocket.displayProperties && typeSocket.displayProperties.name || "";
-      return /armor_tiering|(?:armor|armure).*?(?:stat|tuning)|(?:stat|tuning).*?(?:armor|armure)/i.test(identifiants + " " + libelle);
+      return /armor_tiering.*(?:tuning|stat)|(?:armor|armure).*?(?:stat|tuning)|(?:stat|tuning).*?(?:armor|armure)/i.test(identifiants + " " + libelle);
     }
 
     async function trouverSocketsDeStatistiques(pieces) {
@@ -1677,7 +1689,19 @@
           .map(function (entree) { return Number(entree && entree.socketTypeHash) || 0; })
           .filter(Boolean);
       })));
+      try {
+        const cacheTypes = JSON.parse(localStorage.getItem("vigieBuildSocketTypesCacheV1") || "null");
+        if (cacheTypes && cacheTypes.version === versionManifestActif && cacheTypes.types) {
+          Object.assign(definitionsTypesSocket, cacheTypes.types);
+        }
+      } catch (_) {}
       await Promise.all(hashesTypes.map(definitionSocketType));
+      try {
+        localStorage.setItem("vigieBuildSocketTypesCacheV1", JSON.stringify({
+          version: versionManifestActif,
+          types: definitionsTypesSocket
+        }));
+      } catch (_) {}
       const indexParInstance = {};
       for (const piece of pieces) {
         const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
