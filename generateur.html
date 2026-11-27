@@ -1581,7 +1581,7 @@
         const donneesSockets = socketParInstance[objetDoctrine.itemInstanceId];
         for (let index = 0; index < (donneesSockets && donneesSockets.sockets || []).length; index++) {
           const hash = Number(donneesSockets.sockets[index].plugHash) || 0;
-          const definition = definitionsLite[hash];
+          const definition = definitionsLite[hash] || definitionsAptitudesDoctrine[hash];
           if (hash && definition && definition.displayProperties && definition.displayProperties.name) {
             plugs.push({ socketIndex: index, plugItemHash: hash, nom: definition.displayProperties.name, icone: definition.displayProperties.icon || "" });
           }
@@ -1590,7 +1590,7 @@
       const planAptitudes = plansAptitudes[clePlanAptitude(choixPersonnage.value, hashDoctrine)] || {};
       const aptitudes = Object.keys(planAptitudes).map(function (socketIndex) {
         const selection = planAptitudes[socketIndex];
-        const definition = definitionsLite[selection.plugItemHash];
+        const definition = definitionsLite[selection.plugItemHash] || definitionsAptitudesDoctrine[selection.plugItemHash];
         if (!definition || !definition.displayProperties) return null;
         return {
           type: selection.type,
