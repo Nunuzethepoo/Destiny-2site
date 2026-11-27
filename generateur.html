@@ -349,6 +349,7 @@
       const objetsLite = {};
       if (!cacheLite.doctrineReady) {
         // Le fichier complet n'est téléchargé qu'une fois par version du manifeste.
+        statut.textContent = "Premier chargement du catalogue Destiny…";
         const objetsLiteComplets = await lireFichier(cheminLite);
         for (const hash of hashesArmure) {
           const definition = objetsLiteComplets[hash];
