@@ -607,13 +607,14 @@
       return resultat;
     }
 
-    function catalogueModsPiece(piece) {
+    function catalogueModsPiece(piece, indicesAutorises) {
       const socketData = socketParInstance[piece.idInstance] || {};
       const sockets = socketData.sockets || [];
       const plugsInstance = (reusablePlugsParInstance[piece.idInstance] && reusablePlugsParInstance[piece.idInstance].plugs) || {};
       const capacite = Number(piece.capaciteEnergie) || 10;
       const catalogue = [];
       for (let i = 0; i < sockets.length; i++) {
+        if (indicesAutorises && indicesAutorises.indexOf(i) === -1) continue;
         const socket = sockets[i];
         const entree = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries[i];
         if (!entree) continue;
@@ -1661,6 +1662,34 @@
       });
     }
 
+    function estSocketDeStatistiques(typeSocket) {
+      if (!typeSocket) return false;
+      const identifiants = (typeSocket.plugWhitelist || []).map(function (entree) {
+        return String(entree && entree.categoryIdentifier || "");
+      }).join(" ");
+      const libelle = typeSocket.displayProperties && typeSocket.displayProperties.name || "";
+      return /armor_tiering|(?:armor|armure).*?(?:stat|tuning)|(?:stat|tuning).*?(?:armor|armure)/i.test(identifiants + " " + libelle);
+    }
+
+    async function trouverSocketsDeStatistiques(pieces) {
+      const hashesTypes = Array.from(new Set(pieces.flatMap(function (piece) {
+        return (piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [])
+          .map(function (entree) { return Number(entree && entree.socketTypeHash) || 0; })
+          .filter(Boolean);
+      })));
+      await Promise.all(hashesTypes.map(definitionSocketType));
+      const indexParInstance = {};
+      for (const piece of pieces) {
+        const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
+        indexParInstance[piece.idInstance] = entrees.reduce(function (indices, entree, index) {
+          const typeSocket = entree && definitionsTypesSocket[Number(entree.socketTypeHash)];
+          if (estSocketDeStatistiques(typeSocket)) indices.push(index);
+          return indices;
+        }, []);
+      }
+      return indexParInstance;
+    }
+
     async function chercher() {
       message.textContent = "";
       zoneResultats.innerHTML = "";
@@ -1714,10 +1743,14 @@
         if (exotique !== "peu") return !piece.exotique || piece.nom === exotique;
         return true;
       });
+      message.textContent = "Repérage des prises de réglage des stats…";
+      const socketsStatsParPiece = await trouverSocketsDeStatistiques(piecesPourMods);
       const hashesEnsemblesMods = [];
       for (const piece of piecesPourMods) {
         const entrees = piece.definition && piece.definition.sockets && piece.definition.sockets.socketEntries || [];
-        for (const entree of entrees) {
+        const indicesStats = socketsStatsParPiece[piece.idInstance] || [];
+        for (const index of indicesStats) {
+          const entree = entrees[index];
           if (entree.reusablePlugSetHash) hashesEnsemblesMods.push(Number(entree.reusablePlugSetHash));
           if (entree.randomizedPlugSetHash) hashesEnsemblesMods.push(Number(entree.randomizedPlugSetHash));
         }
@@ -1746,10 +1779,12 @@
       for (const piece of piecesPourMods) {
         const socketData = socketParInstance[piece.idInstance] || {};
         const sockets = socketData.sockets || [];
-        nombreSocketsAnalysees += sockets.length;
+        const indicesStats = socketsStatsParPiece[piece.idInstance] || [];
         const plugsInstance = (reusablePlugsParInstance[piece.idInstance] && reusablePlugsParInstance[piece.idInstance].plugs) || {};
         const definition = piece.definition;
-        for (let i = 0; i < sockets.length; i++) {
+        for (const i of indicesStats) {
+          if (!sockets[i]) continue;
+          nombreSocketsAnalysees++;
           const entree = definition && definition.sockets && definition.sockets.socketEntries[i];
           if (!entree) continue;
           const ensembles = [entree.reusablePlugSetHash, entree.randomizedPlugSetHash].filter(Boolean);
@@ -1762,12 +1797,12 @@
         }
       }
       const hashesModsUniques = Array.from(new Set(hashesMods));
-      message.textContent = "Analyse de " + hashesModsUniques.length + " mods possibles…";
+      message.textContent = "Lecture de " + hashesModsUniques.length + " plugs candidats dans les prises de stats…";
       await chargerDefinitionsMods(hashesModsUniques);
       const cataloguesMods = {};
       let nombreModsStatDisponibles = 0;
       for (const piece of piecesPourMods) {
-        const catalogue = catalogueModsPiece(piece);
+        const catalogue = catalogueModsPiece(piece, socketsStatsParPiece[piece.idInstance] || []);
         cataloguesMods[piece.idInstance] = catalogue;
         catalogue.sockets.forEach(function (socket) { nombreModsStatDisponibles += socket.options.length; });
       }
